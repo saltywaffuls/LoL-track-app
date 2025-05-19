@@ -28,7 +28,7 @@ def main():
             stats.append(my_stats)
 
     summary = compute_summary(stats)  # Compute the summary statistics from the list of stats
-    print(f"\nOver last {len(stats)} games:")
+    print(f"\nOver last {args.matches} games:")
     print(f"Avg KDA: {summary['avg_kda']:.2f}")
     print(f"Avg CS/min: {summary['avg_cs_per_min']:.2f}")
     print(f"Win rate: {summary['win_rate']:.2%}")
