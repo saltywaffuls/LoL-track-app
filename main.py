@@ -1,18 +1,23 @@
 from module2 import get_riot_ID, get_summoner_ID  # Import necessary functions and constants
 from module3 import get_lol_match_ID, get_match_data, extract_my_stats, compute_summary
+from Module5 import init_storage, save_match_data, load_data  # Import functions for data storage and retrieval
 import argparse, requests
 from urllib.parse import quote  # For URL encoding of summoner names
+from datetime import datetime, timedelta
 
 def main():
-    pass
 
 # 1) Parse command-line arguments
     parser = argparse.ArgumentParser("LoL Track")
+    sub = parser.add_subparsers(dest="command", required=True)  # Create a subparser for commands
+
     parser.add_argument("summoner_name", help="Your in-client summoner name (spaces allowed)")
     parser.add_argument("--region",    default="na1", help="Platform region (na1, euw1, etc.)")
     parser.add_argument("--matches",   type=int, default=20, help="How many recent games to analyze")
     args = parser.parse_args()
 
+    prog_p = sub.add_parser("progress", help="Program name")
+    prog_p.add_argument("--days", type=int, default=20, help="shows progress over the last X days")
 
     puuid = get_riot_ID(args.summoner_name, args.region)  # Fetch the PUUID using the provided summoner name and region
     summ = get_summoner_ID(puuid, args.region)  # Fetch the summoner data using the PUUID
@@ -27,13 +32,19 @@ def main():
         if my_stats:  # If stats are found, append them to the list
             stats.append(my_stats)
 
+    init_storage()  # Initialize the CSV file for storing historical stats
+    for s in stats:
+        s["data"] = datetime.now().isoformat()  # Add a timestamp to each stat
+        save_match_data(s)  # Save the match data to the CSV file
+
+
     summary = compute_summary(stats)  # Compute the summary statistics from the list of stats
     print(f"\nOver last {args.matches} games:")
+    print(f"champion: {stats[0]['champion']}")
     print(f"Avg KDA: {summary['avg_kda']:.2f}")
     print(f"Avg CS/min: {summary['avg_cs_per_min']:.2f}")
     print(f"Win rate: {summary['win_rate']:.2%}")
 
-#safe_name = quote(summoner_name)  # Encodes spaces and special characters in the summoner name
 
 if __name__ == "__main__":
     try:
