@@ -4,7 +4,7 @@ from module2 import HEADERS  # reuse the same headers dict
 
 def get_lol_match_ID(puuid: str, start: int = 0, count: int = 20,) -> list:
     # Construct the base URL for the Riot API request
-    base_url = f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count=20"
+    base_url = f"https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"  # The base URL for the API request
     
     resp = requests.get(base_url, headers=HEADERS)  # Send the GET request with headers
     resp.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx status codes)

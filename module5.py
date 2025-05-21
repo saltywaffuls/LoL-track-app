@@ -31,15 +31,17 @@ def save_match_data(data: dict):
     Save match data to the CSV file.
     This function appends a new row to the CSV file with the provided match data.
     """
+    existing = set()  # Initialize an empty set to store existing match IDs.
+    
     # Open the CSV file in append mode.
-    with open(CSV_path, "a", newline="") as f:
-        reader = csv.DictReader(f)
-        existing = {row["match_id"] for row in reader}
+    if os.path.exists(CSV_path): # If the file exists, read the existing match IDs to check for duplicates.
+        with open(CSV_path, newline="") as f:
+            reader = csv.DictReader(f)
+            existing = {row["match_id"] for row in reader}
         # Check if the match ID already exists in the CSV file.
 
-        if data["match_id"] in existing:
-            # If the match ID already exists, do not write it again.
-            return
+    if data["match_id"] in existing:
+        return # If the match ID already exists, do not write it again.
         
     with open(CSV_path, "a", newline="") as f:
         # Create a DictWriter object for appending data.

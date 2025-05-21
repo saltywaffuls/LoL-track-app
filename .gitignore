@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 .vscode/
 GIT_WORKFLOW_GUIDE.txt
+data/history.csv
