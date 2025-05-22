@@ -16,7 +16,7 @@ if not API_KEY:  # If the API key is not found, raise an error
 HEADERS = {"X-Riot-Token": API_KEY}  # The Riot API requires the API key to be passed in the headers
 
 def get_riot_ID(safe_name, region):
-    # Construct the base URL for the Riot API request
+    # Construct the base URL for the Riot API request /riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}
     base_url = f"https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{safe_name}/{region}"  # The base URL for the API request
     # The URL includes the region (na1 for North America) and the encoded summoner name
 
@@ -31,7 +31,7 @@ def get_riot_ID(safe_name, region):
         
 
 def get_summoner_ID(puuid, region):
-    # Construct the base URL for the Riot API request to fetch summoner ID
+    # Construct the base URL for the Riot API request to fetch summoner ID /lol/summoner/v4/summoners/by-puuid/{encryptedPUUID}
     base_url = f"https://{region}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}"  # The base URL for the API request
 
         # Send a GET request to the Riot API

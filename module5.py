@@ -7,7 +7,7 @@ from datetime import datetime, timedelta  # Import datetime for handling date an
 CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
-FIELDS = ["match_id", "date", "kills", "deaths", "assists", "cs", "win", "duration", "champion"]
+FIELDS = ["match_id", "patch", "date", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
 
 def init_storage():
     """
@@ -15,6 +15,8 @@ def init_storage():
     This function checks if the CSV file exists.
     If it does not exist, it creates the file and writes the header row.
     """
+    os.makedirs(os.path.dirname(CSV_path), exist_ok=True) # Create the directory if it doesn't exist.
+
     # Check if the CSV file already exists at the specified path.
     if not os.path.exists(CSV_path):
         # If the file does not exist, open it in write mode.
@@ -66,11 +68,19 @@ def load_data(day: int = None) -> list[dict]:
             row["kills"] = int(row["kills"])
             row["deaths"] = int(row["deaths"])
             row["assists"] = int(row["assists"])
-            row["cs"] = int(row["cs"])
+            row["cs"] = float(row["cs"])
             row["win"] = row["win"] == "True"
             row["champion"] = row["champion"]
-            row["duration"] = int(row["duration"])
+            row["duration"] = float(row["duration"])
             row["date"] = datetime.strptime(row["date"], "%Y-%m-%d %H:%M:%S")
+            row["patch"] = row["patch"]
+            row["gold"] = float(row["gold"])
+            row["vision"] = float(row["vision"])
+            row["xp_per_min"] = float(row["xp_per_min"])
+            row["cs_per_min"] = float(row["cs_per_min"])
+            row["gold_per_min"] = float(row["gold_per_min"])
+            row["level"] = int(row["level"])
+            row["items"] = row["items"].split(",")
             if cutoff is None or row["date"] >= cutoff:
                 out.append(row)
     return out

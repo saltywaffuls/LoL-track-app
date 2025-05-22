@@ -27,23 +27,88 @@ def get_match_data(match_id: str, region: str = "americas") -> dict:
 
 def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
     
-    duration_min = match_json["info"]["gameDuration"] / 60  # Extract and convert game duration to minutes
-
     for P in match_json["info"]["participants"]:
         if P["puuid"] == my_puuid:  # Check if the participant's PUUID matches the provided PUUID
+
             stats = {
                 "match_id": match_json["metadata"]["matchId"],  # Extract match ID
+                "patch": match_json["info"]["gameVersion"],  # Extract game version
+                "duration":  match_json["info"]["gameDuration"] / 60,
                 "champion": P["championName"],  # Extract champion name
                 "kills": P["kills"],  # Extract kills
                 "deaths": P["deaths"],  # Extract deaths
                 "assists": P["assists"],  # Extract assists
+                "kill_participation": kill_participation(P, match_json),  # Calculate kill participation
                 "cs": P["totalMinionsKilled"] + P["neutralMinionsKilled"],  # Calculate total CS
+                "damage": P["totalDamageDealtToChampions"],  # Extract total damage dealt to champions
+                "gold": P["goldEarned"],  # Extract gold earned
+                "vision": P["visionScore"],  # Extract vision score
                 "win": P["win"],  # Extract win status
-                "duration": duration_min  # Add game duration in minutes
             }
-            return stats  # Return the extracted stats as a dictionary
+
+            stats_timeline = {
+                "gold_per_min": gold_at_time(P, match_json, stats["duration"]),  # Calculate gold per minute
+                "cs_per_min": cs_per_min(P, match_json),  # Calculate CS per minute
+                "xp_per_min": xp_per_min(P, match_json),  # Calculate XP per minute
+                "level": level_at_time(P, match_json, stats["duration"]),  # Extract level at the end of the game
+                "items": extract_item_timeline(P, match_json),  # Extract item timeline
+            }
+
+            return { **stats, **stats_timeline }  # Return the extracted stats as a dictionary
 
     return None  # Return None if no matching participant is found
+
+def kill_participation(participant: dict, match_json: dict) -> float:
+    team_kills = sum(p["kills"] + p["assists"] for p in match_json["info"]["participants"]
+                     if p["teamId"] == participant["teamId"])  # Calculate total team kills
+    
+    return (participant["kills"] + participant["assists"]) / team_kills if team_kills > 0 else 0.0  # Calculate kill participation
+
+def gold_at_time(p: dict, match_json: dict, game_time: int) -> int:
+
+    ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
+    pid = p["participantId"]  # Extract participant ID
+    for frame in match_json["info"]["frames"]:
+        if frame["timestamp"] > ts_cutoff:  # Check if the timestamp is greater than the cutoff
+            break
+        for participant in frame["participantFrames"]:
+            if participant["participantId"] == pid:  # Check if the participant ID matches
+                return participant["totalGold"]  # Return the total gold at the specified game time
+
+def cs_per_min(p: dict, match_json: dict) -> float:
+    total_cs = p["totalMinionsKilled"] + p["neutralMinionsKilled"]  # Calculate total CS
+    game_duration = match_json["info"]["gameDuration"] / 60  # Convert game duration to minutes
+    return total_cs / game_duration if game_duration > 0 else 0.0  # Calculate CS per minute
+
+def xp_per_min(p: dict, match_json: dict) -> float:
+    total_xp = p["xp"]  # Extract total XP
+    game_duration = match_json["info"]["gameDuration"] / 60  # Convert game duration to minutes
+    return total_xp / game_duration if game_duration > 0 else 0.0  # Calculate XP per minute
+
+def level_at_time(p: dict, match_json: dict, game_time: int) -> int:
+    ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
+    pid = p["participantId"]  # Extract participant ID
+    for frame in match_json["info"]["frames"]:
+        if frame["timestamp"] > ts_cutoff:  # Check if the timestamp is greater than the cutoff
+            break
+        for participant in frame["participantFrames"]:
+            if participant["participantId"] == pid:  # Check if the participant ID matches
+                return participant["level"]  # Return the level at the specified game time
+
+def extract_item_timeline(p:dict, match_json:dict) -> list[tuple[int,int]]:
+    items = []  # Initialize an empty list to store item timelines
+    pid = p["participantId"]  # Extract participant ID
+
+    for frame in match_json["info"]["frames"]:
+        ts = frame["timestamp"]  # Extract timestamp
+        for ev in frame["events"]:
+            if ev["type"] == "ITEM_PURCHASED" and ev.get("participantId") == pid:
+                items.append((ts, ev["itemId"]))
+            elif ev["type"] == "ITEM_SOLD" and ev.get("participantId") == pid:
+                items.append((ts, ev["itemId"]))
+
+    return items  # Return the list of item timelines
+
 
 def compute_summary(stats: list[dict]) -> dict:
     
@@ -52,9 +117,14 @@ def compute_summary(stats: list[dict]) -> dict:
     total_deaths = sum(stat["deaths"] for stat in stats)  # Sum of deaths from all games
     total_cs = sum(stat["cs"] for stat in stats)  # Sum of CS from all games
     total_wins = sum(1 for stat in stats if stat["win"])  # Count of wins
+    total_duration = sum(stat["duration"] for stat in stats)  # Calculate total duration
 
-    avg_kda = (total_kills + total_assists) / total_deaths if total_deaths > 0 else float('inf')  # Calculate average KDA
-    avg_cs_per_min = total_cs / sum(stat["duration"] for stat in stats)  # Calculate average CS per minute
+    if total_kills == 0 and total_assists == 0:
+        avg_kda = 0.0
+    else:
+        avg_kda = (total_kills + total_assists) / total_deaths if total_deaths > 0 else float('inf')  # Calculate average KDA
+
+    avg_cs_per_min = total_cs / total_duration if total_duration > 0 else 0.0  # Calculate average CS per minute
     win_rate = total_wins / len(stats) if len(stats) > 0 else 0.0  # Calculate win rate
 
     return {

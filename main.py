@@ -26,11 +26,14 @@ def main():
     args = parser.parse_args()  
     if args.command == "stats":  # If the command is 'progress', load and display historical data  
         run_account(args)  # Call the function to fetch and display account stats
-    else: # If the command is 'stats', fetch and display recent game stats
-        run_progress(args)  # Call the function to show progress
+    elif args.command == "progress": # If the command is 'stats', fetch and display recent game stats
+        run_progress(args)
+    else:
+        parser.print_help  # Call the function to show progress
 
 def run_account(args):
-        puuid = get_riot_ID(args.summoner_name, args.region)  # Fetch the PUUID using the provided summoner name and region
+        name = quote(args.summoner_name)
+        puuid = get_riot_ID(name, args.region)  # Fetch the PUUID using the provided summoner name and region
         summ = get_summoner_ID(puuid, args.region)  # Fetch the summoner data using the PUUID
         print(f"Level: {summ['summonerLevel']}  Icon: {summ['profileIconId']}")
 
@@ -60,7 +63,6 @@ def run_progress(args):
         return
 
     summary = compute_summary(hist)  # Compute the summary statistics from the list of stats
-    print(f"\nOver last {args.matches} games:")
     print(f"Avg KDA: {summary['avg_kda']:.2f}")
     print(f"Avg CS/min: {summary['avg_cs_per_min']:.2f}")
     print(f"Win rate: {summary['win_rate']:.2%}")
@@ -76,5 +78,7 @@ if __name__ == "__main__":
             print("⏳  Rate limit exceeded—please wait a bit and try again.")
         else:
             print(f"HTTP {code} error: {http_err.response.text}")
+    # Catch-all for unexpected errors that are not HTTP-related.
+    # This ensures the program does not crash and provides a message for debugging.
     except Exception as e:
         print("Unexpected error:", e)
