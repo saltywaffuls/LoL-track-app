@@ -1,13 +1,14 @@
 import os  # Import the os module for file and path operations
 import csv  # Import the csv module for reading and writing CSV files
 from datetime import datetime, timedelta  # Import datetime for handling date and time
+import json  # Import json for handling items field if it's in JSON format
 
 # Define the path to the CSV file where match history will be stored.
 # os.path.join ensures the path works on any operating system.
 CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
-FIELDS = ["match_id", "patch", "date", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
+FIELDS = ["match_id", "patch", "date", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "damage", "kill_participation", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
 
 def init_storage():
     """
@@ -51,7 +52,6 @@ def save_match_data(data: dict):
         # Write the match data as a new row in the CSV file.
         writer.writerow(data)
 
-
 def load_data(day: int = None) -> list[dict]:
     """
     If days is given, only return games from the last X days.
@@ -65,6 +65,7 @@ def load_data(day: int = None) -> list[dict]:
     with open(CSV_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            row["patch"] = row.get("patch", "")
             row["kills"] = int(row["kills"])
             row["deaths"] = int(row["deaths"])
             row["assists"] = int(row["assists"])
@@ -74,16 +75,19 @@ def load_data(day: int = None) -> list[dict]:
             row["duration"] = float(row["duration"])
             row["date"] = datetime.strptime(row["date"], "%Y-%m-%d %H:%M:%S")
             row["patch"] = row["patch"]
-            row["gold"] = float(row["gold"])
+            row["gold"] = float(row.get("gold", 0))
             row["vision"] = float(row["vision"])
-            row["xp_per_min"] = float(row["xp_per_min"])
-            row["cs_per_min"] = float(row["cs_per_min"])
-            row["gold_per_min"] = float(row["gold_per_min"])
-            row["level"] = int(row["level"])
-            row["items"] = row["items"].split(",")
+            row["xp_per_min"]   = float(row.get("xp_per_min", 0))
+            row["cs_per_min"]   = float(row.get("cs_per_min", 0))
+            row["gold_per_min"] = float(row.get("gold_per_min", 0))
+            row["level"]        = int(row.get("level", 0))
+            # items might be JSON or comma-list; handle missing safely:
+            items_str = row.get("items", "")
+            row["items"] = json.loads(items_str) if items_str.startswith("[") else items_str.split(",") if items_str else []
             if cutoff is None or row["date"] >= cutoff:
                 out.append(row)
     return out
+    
            
 
 

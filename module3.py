@@ -1,5 +1,6 @@
 import requests
-from module2 import HEADERS  # reuse the same headers dict
+from module2 import HEADERS, get_riot_ID  # reuse the same headers dict
+
 
 
 def get_lol_match_ID(puuid: str, start: int = 0, count: int = 20,) -> list:
@@ -26,7 +27,11 @@ def get_match_data(match_id: str, region: str = "americas") -> dict:
         
 
 def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
-    
+    # Defensive: Ensure match_json is a dict and has the expected keys
+    if not isinstance(match_json, dict) or "info" not in match_json or "participants" not in match_json["info"]:
+        print("DEBUG: Bad match_json received:", match_json)
+        return None
+
     for P in match_json["info"]["participants"]:
         if P["puuid"] == my_puuid:  # Check if the participant's PUUID matches the provided PUUID
 
@@ -46,12 +51,14 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
                 "win": P["win"],  # Extract win status
             }
 
+            timeline_json = get_match_timeline(match_json["metadata"]["matchId"])  # Fetch timeline data once
+
             stats_timeline = {
-                "gold_per_min": gold_at_time(P, match_json, stats["duration"]),  # Calculate gold per minute
+                "gold_per_min": gold_at_time(P, timeline_json, stats["duration"]),  # Calculate gold at end of game
                 "cs_per_min": cs_per_min(P, match_json),  # Calculate CS per minute
-                "xp_per_min": xp_per_min(P, match_json),  # Calculate XP per minute
-                "level": level_at_time(P, match_json, stats["duration"]),  # Extract level at the end of the game
-                "items": extract_item_timeline(P, match_json),  # Extract item timeline
+                "xp_per_min": xp_per_min(P, timeline_json, stats["duration"]),  # Calculate XP per minute
+                "level": level_at_time(P, timeline_json, stats["duration"]),  # Extract level at the end of the game
+                "items": extract_item_timeline(P, timeline_json),  # Extract item timeline
             }
 
             return { **stats, **stats_timeline }  # Return the extracted stats as a dictionary
@@ -64,44 +71,64 @@ def kill_participation(participant: dict, match_json: dict) -> float:
     
     return (participant["kills"] + participant["assists"]) / team_kills if team_kills > 0 else 0.0  # Calculate kill participation
 
-def gold_at_time(p: dict, match_json: dict, game_time: int) -> int:
+def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int:
 
     ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
     pid = p["participantId"]  # Extract participant ID
-    for frame in match_json["info"]["frames"]:
+    for frame in timeline_json["info"]["frames"]:
         if frame["timestamp"] > ts_cutoff:  # Check if the timestamp is greater than the cutoff
             break
-        for participant in frame["participantFrames"]:
-            if participant["participantId"] == pid:  # Check if the participant ID matches
-                return participant["totalGold"]  # Return the total gold at the specified game time
+        # participantFrames is a dict id_str → stats
+        for pdata in frame["participantFrames"].values():
+            if pdata["participantId"] == pid:
+                return pdata["totalGold"]
+    return 0  # Return 0 if not found
 
 def cs_per_min(p: dict, match_json: dict) -> float:
     total_cs = p["totalMinionsKilled"] + p["neutralMinionsKilled"]  # Calculate total CS
     game_duration = match_json["info"]["gameDuration"] / 60  # Convert game duration to minutes
     return total_cs / game_duration if game_duration > 0 else 0.0  # Calculate CS per minute
 
-def xp_per_min(p: dict, match_json: dict) -> float:
-    total_xp = p["xp"]  # Extract total XP
-    game_duration = match_json["info"]["gameDuration"] / 60  # Convert game duration to minutes
-    return total_xp / game_duration if game_duration > 0 else 0.0  # Calculate XP per minute
+def xp_per_min(p: dict, timeline_json: dict, game_time: int) -> float:
+    ts_cutoff = game_time * 60_000  # Convert game time to ms
+    pid = p["participantId"]
+    last_xp = 0
+    for frame in timeline_json["info"]["frames"]:
+        if frame["timestamp"] > ts_cutoff:
+            break
+        for pdata in frame["participantFrames"].values():
+            if pdata["participantId"] == pid:
+                last_xp = pdata.get("xp", 0)
+    return last_xp / game_time if game_time > 0 else 0.0  # Calculate XP per minute
 
-def level_at_time(p: dict, match_json: dict, game_time: int) -> int:
+def level_at_time(p: dict, timeline_json: dict, game_time: int) -> int:
     ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
     pid = p["participantId"]  # Extract participant ID
-    for frame in match_json["info"]["frames"]:
+    for frame in timeline_json["info"]["frames"]:
         if frame["timestamp"] > ts_cutoff:  # Check if the timestamp is greater than the cutoff
             break
-        for participant in frame["participantFrames"]:
+        for participant in frame["participantFrames"].values():
             if participant["participantId"] == pid:  # Check if the participant ID matches
                 return participant["level"]  # Return the level at the specified game time
 
-def extract_item_timeline(p:dict, match_json:dict) -> list[tuple[int,int]]:
+
+def get_match_timeline(match_id: str, region: str = "americas") -> dict:
+    base_url = f"https://{region}.api.riotgames.com/lol/match/v5/matches/{match_id}/timeline"
+    
+    resp = requests.get(base_url, headers=HEADERS)  # Send the GET request with headers
+    resp.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx status codes)
+
+    match_timeline = resp.json()  # Parse the JSON response into a Python dictionary
+            
+    return match_timeline  # Return the match timeline as a dictionary
+
+def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int]]:
     items = []  # Initialize an empty list to store item timelines
     pid = p["participantId"]  # Extract participant ID
 
-    for frame in match_json["info"]["frames"]:
+    for frame in timeline_json["info"]["frames"]:
         ts = frame["timestamp"]  # Extract timestamp
-        for ev in frame["events"]:
+        for ev in frame.get("events", []):
             if ev["type"] == "ITEM_PURCHASED" and ev.get("participantId") == pid:
                 items.append((ts, ev["itemId"]))
             elif ev["type"] == "ITEM_SOLD" and ev.get("participantId") == pid:
