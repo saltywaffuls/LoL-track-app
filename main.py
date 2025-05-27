@@ -44,7 +44,9 @@ def run_account(args):
                   if extract_my_stats(get_match_data(mid), puuid)]  # Extract stats for each match ID
         init_storage()  # Initialize the CSV file for storing historical stats
         for s in stats:
-            s["date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            s["summoner_id"] = args.summoner_name  # Add the summoner name to the data
+            s["region"] = args.region                # Add the region to the data
+            s["date"] = datetime.now().strftime("%m-%d-%Y %H:%M:%S")  # (optional: overwrite date with save time)
             save_match_data(s)  # Save the match data to the CSV file
 
         summary = compute_summary(stats)  # Compute the summary statistics from the list of stats
@@ -52,6 +54,11 @@ def run_account(args):
         print(f"Avg KDA: {summary['avg_kda']:.2f}")
         print(f"Avg CS/min: {summary['avg_cs_per_min']:.2f}")
         print(f"Win rate: {summary['win_rate']:.2%}")
+        print(f"Acg dmg/game: {summary['avg_damage']:.2f}")
+        print(f"Avg kill participation: {summary['avg_kp']:.2%}")
+        print(f"Avg gold per game: {summary['avg_gold']:.2f}")
+        print(f"Abg vision score per game: {summary['avg_vision']:.2f}")
+        
 
 
 def run_progress(args):

@@ -8,7 +8,7 @@ import json  # Import json for handling items field if it's in JSON format
 CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
-FIELDS = ["match_id", "patch", "date", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "damage", "kill_participation", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
+FIELDS = ["summoner_id","match_id", "patch", "date", "region", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "damage", "kill_participation", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
 
 def init_storage():
     """
@@ -65,6 +65,7 @@ def load_data(day: int = None) -> list[dict]:
     with open(CSV_path, newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
+            row["summoner_name"] = row.get("summonerID", "")
             row["patch"] = row.get("patch", "")
             row["kills"] = int(row["kills"])
             row["deaths"] = int(row["deaths"])
@@ -73,14 +74,16 @@ def load_data(day: int = None) -> list[dict]:
             row["win"] = row["win"] == "True"
             row["champion"] = row["champion"]
             row["duration"] = float(row["duration"])
-            row["date"] = datetime.strptime(row["date"], "%Y-%m-%d %H:%M:%S")
-            row["patch"] = row["patch"]
+            row["date"] = row["date"]  # Keep date as string for now
+            row["region"] = row.get("region", "na1")
             row["gold"] = float(row.get("gold", 0))
             row["vision"] = float(row["vision"])
             row["xp_per_min"]   = float(row.get("xp_per_min", 0))
             row["cs_per_min"]   = float(row.get("cs_per_min", 0))
             row["gold_per_min"] = float(row.get("gold_per_min", 0))
-            row["level"]        = int(row.get("level", 0))
+            row["level"] = int(row.get("level", 0))
+            row["kill_participation"] = float(row.get("kill_participation", 0))
+            row["damage"] = float(row.get("damage", 0))
             # items might be JSON or comma-list; handle missing safely:
             items_str = row.get("items", "")
             row["items"] = json.loads(items_str) if items_str.startswith("[") else items_str.split(",") if items_str else []

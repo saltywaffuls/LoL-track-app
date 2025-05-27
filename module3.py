@@ -36,7 +36,9 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
         if P["puuid"] == my_puuid:  # Check if the participant's PUUID matches the provided PUUID
 
             stats = {
+                "summoner_id": P["summonerId"],  # Extract summoner ID
                 "match_id": match_json["metadata"]["matchId"],  # Extract match ID
+                "date": match_json["info"]["gameCreation"],  # Extract game creation date
                 "patch": match_json["info"]["gameVersion"],  # Extract game version
                 "duration":  match_json["info"]["gameDuration"] / 60,
                 "champion": P["championName"],  # Extract champion name
@@ -145,6 +147,11 @@ def compute_summary(stats: list[dict]) -> dict:
     total_cs = sum(stat["cs"] for stat in stats)  # Sum of CS from all games
     total_wins = sum(1 for stat in stats if stat["win"])  # Count of wins
     total_duration = sum(stat["duration"] for stat in stats)  # Calculate total duration
+    total_kp = sum(s.get("kill_participation", 0) for s in stats)  # Sum of kill participation
+    total_dmg = sum(s.get("damage", 0) for s in stats)  # Sum of damage dealt to champions
+    total_gold = sum(s.get("gold", 0) for s in stats)  # Sum of gold earned
+    total_gpm = sum(s.get("gold_per_min", 0) for s in stats)  # Sum of gold per minute
+    total_vis = sum(s.get("vision", 0) for s in stats)  # Sum of vision score
 
     if total_kills == 0 and total_assists == 0:
         avg_kda = 0.0
@@ -153,11 +160,22 @@ def compute_summary(stats: list[dict]) -> dict:
 
     avg_cs_per_min = total_cs / total_duration if total_duration > 0 else 0.0  # Calculate average CS per minute
     win_rate = total_wins / len(stats) if len(stats) > 0 else 0.0  # Calculate win rate
+    avg_kp = total_kp / len(stats) if len(stats) > 0 else 0.0  # Calculate average kill participation
+    avg_dmg = total_dmg / len(stats) if len(stats) > 0 else 0.0  # Calculate average damage dealt
+    avg_gpm = total_gpm / len(stats) if len(stats) > 0 else 0.0  # Calculate average gold per minute
+    avg_vis = total_vis / len(stats) if len(stats) > 0 else 0.0  # Calculate average vision score
+    avg_gold = total_gold / len(stats) if len(stats) > 0 else 0.0  # Calculate average gold earned
+
 
     return {
         "avg_kda": avg_kda,
         "avg_cs_per_min": avg_cs_per_min,
-        "win_rate": win_rate
+        "win_rate": win_rate,
+        "avg_kp": avg_kp,
+        "avg_damage": avg_dmg,
+        "avg_gold_per_min": avg_gpm,
+        "avg_vision": avg_vis,
+        "avg_gold": avg_gold,
     }  # Return the computed summary as a dictionary
 
 
