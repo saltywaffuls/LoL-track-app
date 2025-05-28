@@ -1,5 +1,6 @@
 import requests
-from module2 import HEADERS, get_riot_ID  # reuse the same headers dict
+from module2 import HEADERS  # reuse the same headers dict
+from datetime import datetime  # For handling timestamps
 
 
 
@@ -24,7 +25,31 @@ def get_match_data(match_id: str, region: str = "americas") -> dict:
     match_data = resp.json()  # Parse the JSON response into a Python dictionary
             
     return match_data  # Return the match data as a dictionary
-        
+
+def get_ranked_data(puuid: str, region: str = "na1") -> dict: # league-v4 | /lol/league/v4/entries/by-puuid/{encryptedPUUID}
+    """
+    Fetches ranked data for a given PUUID.
+    This function is a placeholder and does not currently implement the actual API call.
+    """
+    base_url = f"https://{region}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}"  # Construct the base URL for the API request
+    resp = requests.get(base_url, headers=HEADERS)  # Send the GET request with headers
+    resp.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx status codes)
+
+    ranked_data = resp.json()  # Parse the JSON response into a Python dictionary
+
+    return ranked_data  # Return the ranked data as a dictionary
+
+def game_type(match_json: dict) -> str:
+    queue_id = match_json["info"].get("queueId", 0)  # Extract queue ID from match JSON
+    if queue_id == 420:
+        return "Ranked Solo/Duo"
+    elif queue_id == 440:
+        return "Ranked Flex"
+    elif queue_id in [400, 410, 420, 430, 440]:
+        return "Normal Game"
+    else:
+        return "Other"  # Return 'Other' for any other queue ID
+
 
 def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
     # Defensive: Ensure match_json is a dict and has the expected keys
@@ -35,11 +60,15 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
     for P in match_json["info"]["participants"]:
         if P["puuid"] == my_puuid:  # Check if the participant's PUUID matches the provided PUUID
 
+            game_creation = match_json["info"].get("gameCreation", 0)  # Extract game creation time
+            match_date = datetime.fromtimestamp(game_creation // 1000).strftime("%m-%d-%Y %H:%M:%S")
+            
             stats = {
                 "summoner_id": P["summonerId"],  # Extract summoner ID
                 "match_id": match_json["metadata"]["matchId"],  # Extract match ID
-                "date": match_json["info"]["gameCreation"],  # Extract game creation date
+                "match_date": match_date,  # Format the game creation time as a string
                 "patch": match_json["info"]["gameVersion"],  # Extract game version
+                "game_type": game_type(match_json),  # Determine the game type
                 "duration":  match_json["info"]["gameDuration"] / 60,
                 "champion": P["championName"],  # Extract champion name
                 "kills": P["kills"],  # Extract kills
@@ -47,6 +76,7 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
                 "assists": P["assists"],  # Extract assists
                 "kill_participation": kill_participation(P, match_json),  # Calculate kill participation
                 "cs": P["totalMinionsKilled"] + P["neutralMinionsKilled"],  # Calculate total CS
+                "level": P["champLevel"],  # Extract champion level
                 "damage": P["totalDamageDealtToChampions"],  # Extract total damage dealt to champions
                 "gold": P["goldEarned"],  # Extract gold earned
                 "vision": P["visionScore"],  # Extract vision score
@@ -59,19 +89,41 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
                 "gold_per_min": gold_at_time(P, timeline_json, stats["duration"]),  # Calculate gold at end of game
                 "cs_per_min": cs_per_min(P, match_json),  # Calculate CS per minute
                 "xp_per_min": xp_per_min(P, timeline_json, stats["duration"]),  # Calculate XP per minute
-                "level": level_at_time(P, timeline_json, stats["duration"]),  # Extract level at the end of the game
                 "items": extract_item_timeline(P, timeline_json),  # Extract item timeline
             }
 
-            return { **stats, **stats_timeline }  # Return the extracted stats as a dictionary
+            ranked_json_list = get_ranked_data(my_puuid)  # Fetch ranked data
+            # Riot API returns a list of ranked queues, pick solo/duo if available, else first or empty dict
+            if isinstance(ranked_json_list, list) and ranked_json_list:
+                ranked_json = next((q for q in ranked_json_list if q.get("queueType") == "RANKED_SOLO_5x5"), ranked_json_list[0])
+            else:
+                ranked_json = {}
+
+            stats_ranked = {
+                "tier": ranked_json.get("tier", "Unranked"),  # Extract tier, default to 'Unranked'
+                "rank": ranked_json.get("rank", "I"),  # Extract rank, default to 'I'
+                "leaguePoints": ranked_json.get("leaguePoints", 0),  # Extract league points
+                "wins": ranked_json.get("wins", 0),  # Extract wins
+                "losses": ranked_json.get("losses", 0),  # Extract losses
+                "win_rate_ranked": (
+                    ranked_json.get("wins", 0) / (ranked_json.get("wins", 0) + ranked_json.get("losses", 0))
+                    if (ranked_json.get("wins", 0) + ranked_json.get("losses", 0)) > 0 else 0.0
+                ),  # Calculate win rate
+            }
+
+            return { **stats, **stats_timeline, **stats_ranked }  # Return the extracted stats as a dictionary
 
     return None  # Return None if no matching participant is found
 
-def kill_participation(participant: dict, match_json: dict) -> float:
-    team_kills = sum(p["kills"] + p["assists"] for p in match_json["info"]["participants"]
-                     if p["teamId"] == participant["teamId"])  # Calculate total team kills
-    
-    return (participant["kills"] + participant["assists"]) / team_kills if team_kills > 0 else 0.0  # Calculate kill participation
+
+def kill_participation(p: dict, match_json: dict) -> float:
+   kp = p["kills"] + p["assists"]  # Calculate total kills and assists
+   team = 0
+   for x in match_json["info"]["participants"]:
+       if x["teamId"] == p["teamId"]:
+           team += x["kills"] + x["assists"]
+   
+   return kp / team if team > 0 else 0.0  # Return kill participation ratio, avoiding division by zero
 
 def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int:
 
@@ -102,16 +154,6 @@ def xp_per_min(p: dict, timeline_json: dict, game_time: int) -> float:
             if pdata["participantId"] == pid:
                 last_xp = pdata.get("xp", 0)
     return last_xp / game_time if game_time > 0 else 0.0  # Calculate XP per minute
-
-def level_at_time(p: dict, timeline_json: dict, game_time: int) -> int:
-    ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
-    pid = p["participantId"]  # Extract participant ID
-    for frame in timeline_json["info"]["frames"]:
-        if frame["timestamp"] > ts_cutoff:  # Check if the timestamp is greater than the cutoff
-            break
-        for participant in frame["participantFrames"].values():
-            if participant["participantId"] == pid:  # Check if the participant ID matches
-                return participant["level"]  # Return the level at the specified game time
 
 
 def get_match_timeline(match_id: str, region: str = "americas") -> dict:
@@ -178,7 +220,7 @@ def compute_summary(stats: list[dict]) -> dict:
         "avg_gold": avg_gold,
     }  # Return the computed summary as a dictionary
 
-
+# add ranked data to the summary
 
 
 

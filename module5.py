@@ -8,7 +8,8 @@ import json  # Import json for handling items field if it's in JSON format
 CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
-FIELDS = ["summoner_id","match_id", "patch", "date", "region", "kills", "deaths", "assists", "cs", "win", "duration", "champion", "damage", "kill_participation", "gold", "vision", "xp_per_min", "cs_per_min", "gold_per_min", "level", "items"]
+FIELDS = ["summoner_id", "tag_line", "match_id", "patch", "match_date", "game_type", "duration", "win", "champion", "kills", "deaths", "assists", "cs", "damage", "kill_participation", "gold", "vision",
+           "xp_per_min", "cs_per_min", "gold_per_min", "level", "items", "tier", "rank", "leaguePoints", "wins", "losses", "win_rate_ranked", "ingest_date"]
 
 def init_storage():
     """
@@ -74,8 +75,8 @@ def load_data(day: int = None) -> list[dict]:
             row["win"] = row["win"] == "True"
             row["champion"] = row["champion"]
             row["duration"] = float(row["duration"])
-            row["date"] = row["date"]  # Keep date as string for now
-            row["region"] = row.get("region", "na1")
+            row["match_date"] = row["match_date"]
+            row["tag_line"] = row.get("tag_line", "na1")
             row["gold"] = float(row.get("gold", 0))
             row["vision"] = float(row["vision"])
             row["xp_per_min"]   = float(row.get("xp_per_min", 0))
@@ -84,6 +85,13 @@ def load_data(day: int = None) -> list[dict]:
             row["level"] = int(row.get("level", 0))
             row["kill_participation"] = float(row.get("kill_participation", 0))
             row["damage"] = float(row.get("damage", 0))
+            row["game_type"] = row.get("game_type", "normal")
+            row["tier"] = row.get("tier", "")
+            row["rank"] = row.get("rank", "")
+            row["leaguePoints"] = int(row.get("leaguePoints", 0))
+            row["wins"] = int(row.get("wins", 0))
+            row["losses"] = int(row.get("losses", 0))
+            row["win_rate_ranked"] = float(row.get("win_rate_ranked", 0.0))
             # items might be JSON or comma-list; handle missing safely:
             items_str = row.get("items", "")
             row["items"] = json.loads(items_str) if items_str.startswith("[") else items_str.split(",") if items_str else []
