@@ -1,5 +1,6 @@
 import requests
 from module2 import HEADERS  # reuse the same headers dict
+from module5 import load_data
 from datetime import datetime  # For handling timestamps
 
 
@@ -117,15 +118,12 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
 
 
 def kill_participation(p: dict, match_json: dict) -> float:
-   kp = p["kills"] + p["assists"]  # Calculate total kills and assists
-   team = 0
-   for x in match_json["info"]["participants"]:
-       if x["teamId"] == p["teamId"]:
-           team += x["kills"] + x["assists"]
-   
-   return kp / team if team > 0 else 0.0  # Return kill participation ratio, avoiding division by zero
+    your = p["kills"] + p["assists"]
+    team_kills = sum(x["kills"] for x in match_json["info"]["participants"]
+                     if x["teamId"] == p["teamId"])
+    return your / team_kills if team_kills else 0.0
 
-def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int:
+def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int: # thiss may not be working as the data alwasy returns 500 invetigate
 
     ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
     pid = p["participantId"]  # Extract participant ID
@@ -195,6 +193,8 @@ def compute_summary(stats: list[dict]) -> dict:
     total_gpm = sum(s.get("gold_per_min", 0) for s in stats)  # Sum of gold per minute
     total_vis = sum(s.get("vision", 0) for s in stats)  # Sum of vision score
 
+    
+
     if total_kills == 0 and total_assists == 0:
         avg_kda = 0.0
     else:
@@ -220,8 +220,32 @@ def compute_summary(stats: list[dict]) -> dict:
         "avg_gold": avg_gold,
     }  # Return the computed summary as a dictionary
 
-# add ranked data to the summary
+def compute_champion_summary(champion_name: str, queue_type: str) -> dict:
+    """
+    Computes summary stats for a specific champion and queue type.
+    """
+    champion_stats = load_data()  # Load all match data from CSV
 
+    # Filter for the specified champion and queue type
+    filtered = [
+        s for s in champion_stats
+        if s.get("champion") == champion_name and s.get("game_type") == queue_type
+    ]
+
+    if not filtered:
+        return {
+            "avg_kda": 0.0,
+            "avg_cs_per_min": 0.0,
+            "win_rate": 0.0,
+            "avg_kp": 0.0,
+            "avg_damage": 0.0,
+            "avg_gold_per_min": 0.0,
+            "avg_vision": 0.0,
+            "avg_gold": 0.0,
+            "avg_league_points": 0.0,
+        }
+
+    return compute_summary(filtered)
 
 
 

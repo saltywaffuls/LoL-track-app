@@ -94,8 +94,28 @@ def load_data(day: int = None) -> list[dict]:
             row["win_rate_ranked"] = float(row.get("win_rate_ranked", 0.0))
             # items might be JSON or comma-list; handle missing safely:
             items_str = row.get("items", "")
-            row["items"] = json.loads(items_str) if items_str.startswith("[") else items_str.split(",") if items_str else []
-            if cutoff is None or row["date"] >= cutoff:
+            try:
+                if items_str.startswith("["):
+                    row["items"] = json.loads(items_str)
+                elif items_str:
+                    row["items"] = items_str.split(",")
+                else:
+                    row["items"] = []
+            except Exception:
+                row["items"] = []
+            # Convert match_date string to datetime for comparison
+            try:
+                match_date_dt = datetime.strptime(row["match_date"], "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                match_date_dt = None
+            if cutoff is None or (match_date_dt and match_date_dt >= cutoff):
+                out.append(row)
+            # Convert ingest_date string to datetime for comparison
+            try:
+                ingest_date_dt = datetime.strptime(row["ingest_date"], "%m-%d-%Y %H:%M:%S")
+            except Exception:
+                ingest_date_dt = None
+            if cutoff is None or (ingest_date_dt and ingest_date_dt >= cutoff):
                 out.append(row)
     return out
     

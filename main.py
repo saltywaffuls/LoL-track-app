@@ -1,5 +1,5 @@
 from module2 import get_riot_ID, get_summoner_ID  # Import necessary functions and constants
-from module3 import get_lol_match_ID, get_match_data,  extract_my_stats, compute_summary
+from module3 import get_lol_match_ID, get_match_data,  extract_my_stats, compute_summary, compute_champion_summary
 from module5 import init_storage, save_match_data, load_data  # Import functions for data storage and retrieval
 import argparse, requests
 from urllib.parse import quote  # For URL encoding of summoner names
@@ -16,6 +16,8 @@ def main():
     stats_p.add_argument("summoner_name", help="Your in-client summoner name (spaces allowed)")
     stats_p.add_argument("--tag_line",    default="na1", help="Platform tag_line (na1, euw1, etc.)")
     stats_p.add_argument("--matches",   type=int, default=20, help="How many recent games to analyze")
+    stats_p.add_argument("--champion", "-c",   help="If given, only show stats for this champion (name or ID)")
+    stats_p.add_argument("--queue_type", "-qt", default="Ranked Solo/Duo", help="Queue type (e.g. Ranked Solo/Duo, ARAM, etc.)")
     
 
     # define progress subcommand
@@ -57,8 +59,7 @@ def run_account(args):
         print(f"Acg dmg/game: {summary['avg_damage']:.2f}")
         print(f"Avg kill participation: {summary['avg_kp']:.2%}")
         print(f"Avg gold per game: {summary['avg_gold']:.2f}")
-        print(f"Abg vision score per game: {summary['avg_vision']:.2f}")
-    
+        print(f"Avg vision score per game: {summary['avg_vision']:.2f}")
 
 
 def run_progress(args):
@@ -73,6 +74,16 @@ def run_progress(args):
     print(f"Avg KDA: {summary['avg_kda']:.2f}")
     print(f"Avg CS/min: {summary['avg_cs_per_min']:.2f}")
     print(f"Win rate: {summary['win_rate']:.2%}")
+
+def champion_summary(args):
+    init_storage()
+    # Prompt for queue type if not provided
+    queue_type = getattr(args, "queue_type", None) or input("Enter queue type (e.g. Ranked Solo/Duo): ")
+    champ_summary = compute_champion_summary(args.champion, queue_type)
+    print(f"Champion: {args.champion} ({queue_type})")
+    print(f"Avg KDA: {champ_summary['avg_kda']:.2f}")
+    print(f"Avg CS/min: {champ_summary['avg_cs_per_min']:.2f}")
+    print(f"Win rate: {champ_summary['win_rate']:.2%}")
 
 if __name__ == "__main__":
     try:
