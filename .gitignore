@@ -4,7 +4,6 @@ venv/
 __pycache__/
 *.pyc
 .vscode/
-GIT_WORKFLOW_GUIDE.txt
-CLI_Commands.txt
 Pseudocode.txt
 data/history.csv
+text_files/

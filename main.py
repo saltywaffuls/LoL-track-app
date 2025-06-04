@@ -51,7 +51,7 @@ def run_account(summoner_name, tag_line = "na1", matches=20):
             save_match_data(s)  # Save the match data to the CSV file
 
         summary = compute_summary(stats)  # Compute the summary statistics from the list of stats
-        return summary, summ["summonerLevel"], summ["profileIconId"]  # Return the summary and summoner details
+        return summary, summ["summonerLevel"], summ["profileIconId"], stats  # Return the summary and summoner details
 
 
 def run_progress(args):
