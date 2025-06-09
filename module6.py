@@ -32,23 +32,62 @@ def pull_data():
         lbl_kp.config(text=f"KP: {summary['avg_kp']:.2%}")
         lbl_winrate.config(text=f"Winrate: {summary['win_rate']:.2%}")
 
-        update_kda_graph(name, tag)  # Pass name and tag
+        update_graph(name, tag)  # Pass name and tag
 
     except Exception as e:
         error_label.config(text=f"Error: {e}")
 
-def update_kda_graph(name, tag):
+def update_graph(name, tag):
     all_matches = load_data()
     filtered = [row for row in all_matches if row["summoner_id"].lower() == name.lower() and row["tag_line"].lower() == tag.lower()]
     filtered.sort(key=lambda x: x["match_date"], reverse=True)
+
+    # Remove duplicates by match_id, keeping the first occurrence (most recent)
+    seen_ids = set()
+    unique_filtered = []
+    for row in filtered:
+        if row["match_id"] not in seen_ids:
+            unique_filtered.append(row)
+            seen_ids.add(row["match_id"])
+
     num_matches = int(entry_matches.get())
-    recent = filtered[:num_matches]
-    kda_list = []
+    recent = unique_filtered[:num_matches]
+
+    # Clear previous rows
+    for row in match_tree.get_children():
+        match_tree.delete(row)
+
+    # Add new rows
     for row in recent:
         deaths = row["deaths"] if row["deaths"] > 0 else 1
-        kda = (row["kills"] + row["assists"]) / deaths
-        kda_list.append(kda)
-    plot_kda(kda_list)
+        kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/deaths:.2f})"
+        cs = f"{row['cs']:.0f}"
+        kp = f"{row['kill_participation']*100:.0f}%"
+        win = "Win" if row["win"] else "Loss"
+        match_tree.insert("", "end", values=(
+            row["champion"], kda, cs, kp, win, row["match_id"], row["match_date"]
+        ))
+
+    stat_list = []
+    stat_type = stat_type_var.get()
+    if stat_type == "Winrate":
+        # Calculate cumulative winrate after each game
+        wins = 0
+        for i, row in enumerate(recent, 1):
+            if row["win"] in [True, "True", "true", 1, "1"]:
+                wins += 1
+            stat_list.append((wins / i) * 100)  # as percent
+    else:
+        for row in recent:
+            if stat_type == "KDA":
+                deaths = row["deaths"] if row["deaths"] > 0 else 1
+                value = (row["kills"] + row["assists"]) / deaths
+            elif stat_type == "CS":
+                value = row["cs"]
+            elif stat_type == "KP":
+                value = row["kill_participation"] * 100  # percent
+            stat_list.append(value)
+    plot_graph(stat_list, stat_type, graph_type_var.get())
 
 def on_entry_click(event):
     if entry_name.get() == 'Game Name + #na1':
@@ -79,6 +118,15 @@ ttk.Label(root, text="Matches:").grid(row=0, column=1)
 entry_matches = ttk.Spinbox(root, from_=1, to=20, width=5)
 entry_matches.grid(row=0, column=2)
 
+# Graph and Stat Type inputs
+graph_type_var = tk.StringVar(value="Line")
+graph_type_combo = ttk.Combobox(root, textvariable=graph_type_var, values=["Line", "Bar", "Scatter", "Step", "Area", "Stem", "Horizontal Bar", "Boxplot"], state="readonly", width=8)
+graph_type_combo.grid(row=3, column=0)
+
+stat_type_var = tk.StringVar(value="KDA")
+stat_type_combo = ttk.Combobox(root, textvariable=stat_type_var, values=["KDA", "CS", "KP", "Winrate"], state="readonly", width=8)
+stat_type_combo.grid(row=3, column=1)
+
 # Pull Data Button
 btn = ttk.Button(root, text="Pull Data", command=pull_data)
 btn.grid(row=0, column=3)
@@ -87,7 +135,6 @@ btn.grid(row=0, column=3)
  #Pack a big frame so, it behaves like the window background
 big_frame = ttk.Frame(root)
 big_frame.grid(row=0, column=4, columnspan=4, sticky="nsew")
-
 
 def change_theme():
     # NOTE: The theme's real name is azure-<mode>
@@ -120,35 +167,82 @@ lbl_kp.grid(row=0, column=2)
 lbl_winrate = ttk.Label(stat_frame, text="Winrate: --")
 lbl_winrate.grid(row=0, column=3)
 
-# Function to plot KDA over recent games
-def plot_kda(kda_list):
+# Function to plot graph over recent games
+def plot_graph(stat_list, stat_type="KDA", graph_type="Line"):
     global plot_canvas
     if plot_canvas is not None:
         plot_canvas.get_tk_widget().destroy()
         plot_canvas = None
 
     fig, ax = plt.subplots(figsize=(7, 4), dpi=100)
-    x = range(1, len(kda_list)+1)
-    ax.plot(x, kda_list, marker="o", color="skyblue", linewidth=2, markersize=8)
-    ax.set_title("KDA Over Recent Games")
+    x = range(1, len(stat_list)+1)
+    if graph_type == "Line":
+        ax.plot(x, stat_list, marker="o", color="skyblue", linewidth=2, markersize=8)
+    elif graph_type == "Bar":
+        ax.bar(x, stat_list, color="skyblue")
+    elif graph_type == "Scatter":
+        ax.scatter(x, stat_list, color="skyblue", s=80)
+    elif graph_type == "Step":
+        ax.step(x, stat_list, where='mid', color="skyblue", linewidth=2)
+    elif graph_type == "Area":
+        ax.fill_between(x, stat_list, color="skyblue", alpha=0.4)
+        ax.plot(x, stat_list, color="skyblue", linewidth=2)
+    elif graph_type == "Stem":
+        ax.stem(x, stat_list, linefmt='skyblue', markerfmt='bo', basefmt=" ")
+    elif graph_type == "Horizontal Bar":
+        ax.barh(x, stat_list, color="skyblue")
+    elif graph_type == "Boxplot":
+        ax.boxplot(stat_list, vert=True)
+    ax.set_title(f"{stat_type} Over Recent Games")
     ax.set_xlabel("Game #", fontsize=12)
-    ax.set_ylabel("KDA", fontsize=12)
+    ax.set_ylabel(
+        "Winrate (%)" if stat_type == "Winrate"
+        else "KP (%)" if stat_type == "KP"
+        else stat_type,
+        fontsize=12
+    )
     ax.grid(True, linestyle='--', alpha=0.6)
-    ax.set_ylim(bottom=0)  # Start y-axis at 0
+    ax.set_ylim(bottom=0)
 
-    # Show KDA values as labels on each point
-    for i, v in enumerate(kda_list):
+    for i, v in enumerate(stat_list):
         ax.text(x[i], v + 0.1, f"{v:.2f}", ha='center', fontsize=9, color='blue')
 
     fig.tight_layout()
-
     plot_canvas = FigureCanvasTkAgg(fig, master=root)
-    plot_canvas.get_tk_widget().grid(row=3, column=0, columnspan=4, pady=10)
+    plot_canvas.get_tk_widget().grid(row=4, column=0, columnspan=4, pady=10)
     plot_canvas.draw()
 
 
 error_label = tk.Label(root, text="", fg="red")
 error_label.grid(row=5, column=0, columnspan=4, sticky="w")
 
+# Function to handle changes in graph or stat type
+def on_graph_or_stat_change(*args):
+    full_name = entry_name.get()
+    if '#' in full_name:
+        name, tag = full_name.split('#', 1)
+    else:
+        name = full_name
+        tag = 'na1'
+    update_graph(name, tag)
+
+graph_type_var.trace("w", on_graph_or_stat_change)
+stat_type_var.trace("w", on_graph_or_stat_change)
+stat_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
+graph_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
+
+# Create a Treeview to display match data
+columns = ("champion", "kda", "cs", "kp", "win", "match_id", "match_date")
+match_tree = ttk.Treeview(root, columns=columns, show="headings", height=8)
+for col in columns:
+    match_tree.heading(col, text=col.capitalize())
+    match_tree.column(col, width=90, anchor="center")
+match_tree.grid(row=4, column=4, rowspan=1, sticky="nsew", padx=10)
+
+root.grid_columnconfigure(4, weight=1)
+root.grid_rowconfigure(4, weight=1)
+
+# Show a blank graph at startup
+plot_graph([], stat_type_var.get(), graph_type_var.get())
 
 root.mainloop()
