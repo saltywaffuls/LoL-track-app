@@ -202,7 +202,7 @@ def compute_summary(stats: list[dict]) -> dict:
 
     avg_cs_per_min = total_cs / total_duration if total_duration > 0 else 0.0  # Calculate average CS per minute
     win_rate = total_wins / len(stats) if len(stats) > 0 else 0.0  # Calculate win rate
-    avg_kp = total_kp  
+    avg_kp = total_kp   / len(stats) if len(stats) > 0 else 0.0  # Calculate average kill participation
     avg_dmg = total_dmg / len(stats) if len(stats) > 0 else 0.0  # Calculate average damage dealt
     avg_gpm = total_gpm / len(stats) if len(stats) > 0 else 0.0  # Calculate average gold per minute
     avg_vis = total_vis / len(stats) if len(stats) > 0 else 0.0  # Calculate average vision score
