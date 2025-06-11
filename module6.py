@@ -2,6 +2,7 @@ from tkinter import ttk
 import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
+import operator
 from main import run_account
 from module5 import load_data
 import os
@@ -56,12 +57,7 @@ def update_graph(name, tag):
     filtered.sort(key=lambda x: x["match_date"], reverse=True)
 
     # Remove duplicates by match_id, keeping the first occurrence (most recent)
-    seen_ids = set()
-    unique_filtered = []
-    for row in filtered:
-        if row["match_id"] not in seen_ids:
-            unique_filtered.append(row)
-            seen_ids.add(row["match_id"])
+    unique_filtered = deduplicate_matches(all_matches)
 
     num_matches = int(entry_matches.get())
     recent = unique_filtered[:num_matches]
@@ -192,31 +188,115 @@ def data_tab_load():
     Load data into the data tab Treeview.
     This function can be called when the data tab is selected.
     """
-    all_matches = load_data()
+    data = load_data()
 
-    match_ids = set()
-    unique_matches = []
-    for row in all_matches:
-        if row["match_id"] in match_ids:
-            continue
-        match_ids.add(row["match_id"])
-        unique_matches.append(row)
-    all_matches = unique_matches
+   #filter by match_id
+    f_data = deduplicate_matches(data)
 
     for row in data_tree.get_children():
         data_tree.delete(row)
 
-    for row in all_matches:
+    for row in f_data:
         user = f"{row['summoner_id']}#{row['tag_line']}" if row['tag_line'] else row['summoner_id']
         kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
         cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
-        kp = row["kill_participation"] * 100  # percent
+        kp = f"{row["kill_participation"] * 100:.0f}%"
+        duration = f"{int(row['duration']) // 60}:{int(row['duration']) % 60:02d}"
         items = row.get("items", "No items")
-        timestamp = row.get("timestamp", "No timestamp")
         data_tree.insert("", "end", values=(
-            user, row["champion"], kda, cs, kp, row["win"], row["duration"], row["damage"], row["level"], row["vision"],
-            row["match_date"], row["game_type"], row["patch"], items, timestamp
+            user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
+            row["match_date"], row["game_type"], row["patch"], items
         ))
+
+def treeview_sort_column(tree, col, reverse):
+    data = [(tree.set(k, col), k) for k in tree.get_children('')]
+    # Try to convert to float for numeric columns, else sort as string
+    try:
+        data.sort(key=lambda t: float(t[0].replace('%','').replace(',','')), reverse=reverse)
+    except ValueError:
+        data.sort(key=lambda t: t[0], reverse=reverse)
+    for index, (val, k) in enumerate(data):
+        tree.move(k, '', index)
+    # Reverse sort next time
+    tree.heading(col, command=lambda: treeview_sort_column(tree, col, not reverse))
+
+def apply_filter():
+    query = filter_var.get().strip()
+    ops = {
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge,
+        "=": operator.eq,
+        "!=": operator.ne,
+    }
+
+    #filter by match_id
+    f_data= deduplicate_matches(load_data())
+
+    # Advanced filter: cs < 7, kills > 10, etc.
+    for op_str, op_func in ops.items():
+        if op_str in query:
+            try:
+                # Split the query into field and value
+                field, value = query.split(op_str, 1)
+                field = field.strip()
+                value = value.strip()
+                  # Convert value to float if possible
+                try:
+                    value = float(value)
+                except ValueError:
+                    pass
+                filtered_data = []
+                for row in f_data:
+                    row_value = row.get(field)
+                    if row_value is None:
+                        continue
+                    try:
+                        if isinstance(value, float):
+                            row_value = float(row_value)
+                    except Exception:
+                        pass
+                    if op_func(row_value, value):
+                        filtered_data.append(row)
+                break
+            except Exception:
+                error_label.config(text=f"Invalid filter query: {query}")
+                return
+    # Simple search: look for the query in any field (case-insensitive)
+    else:
+        filtered_data = []
+        for row in f_data:
+            for v in row.values():
+                if query.lower() in str(v).lower():
+                    filtered_data.append(row)
+                    break
+
+    # Update the data_tree with filtered results
+    for row in data_tree.get_children():
+        data_tree.delete(row)
+    for row in filtered_data:
+        user = f"{row['summoner_id']}#{row['tag_line']}" if row['tag_line'] else row['summoner_id']
+        kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
+        cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
+        kp = f"{row["kill_participation"] * 100:.0f}%"
+        duration = f"{int(row['duration']) // 60}:{int(row['duration']) % 60:02d}"
+        items = row.get("items", "No items")
+        data_tree.insert("", "end", values=(
+            user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
+            row["match_date"], row["game_type"], row["patch"], items
+        ))
+    
+
+def deduplicate_matches(matches):
+    """Remove duplicate matches by match_id, keeping the first occurrence."""
+    seen_ids = set()
+    unique_matches = []
+    for row in matches:
+        if row["match_id"] not in seen_ids:
+            unique_matches.append(row)
+            seen_ids.add(row["match_id"])
+    return unique_matches
 
 entry_name = tk.Entry(dashboard_tab)
 entry_name.grid(row=0, column=0)
@@ -299,22 +379,32 @@ graph_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
 columns = ("champion", "kda", "cs", "kp", "win", "match_id", "match_date")
 match_tree = ttk.Treeview(dashboard_tab, columns=columns, show="headings", height=8, selectmode="browse")
 for col in columns:
-    match_tree.heading(col, text=col.capitalize())
+    match_tree.heading(col, text=col.capitalize(),
+                      command=lambda _col=col: treeview_sort_column(match_tree, _col, False))
     match_tree.column(col, width=90, anchor="center")
 match_tree.grid(row=4, column=4, rowspan=1, sticky="nsew", padx=10)
 
 root.grid_columnconfigure(4, weight=1)
 root.grid_rowconfigure(4, weight=1)
 
+filter_var = tk.StringVar()
+filter_entry = ttk.Entry(data_tab, textvariable=filter_var, width=30)
+filter_entry.grid(row=0, column=0, sticky="w", padx=10, pady=5)
+
+filter_btn = ttk.Button(data_tab, text="Apply Filter", command=apply_filter)
+filter_btn.grid(row=0, column=1, sticky="w", padx=5, pady=5)
+
+# data tab Treeview
 column_data = (
     "user", "champion", "kda", "cs", "kp", "win", "duration", "damage", "level", "vision",
-    "match_date", "game_type", "patch", "items", "timestamp"
+    "match_date", "game_type", "patch", "items"
 )
 data_tree = ttk.Treeview(data_tab, columns=column_data, show="headings", height=10)
 for col in column_data:
-    data_tree.heading(col, text=col.capitalize())
+    data_tree.heading(col, text=col.capitalize(),
+                      command=lambda _col=col: treeview_sort_column(data_tree, _col, False))
     data_tree.column(col, width=100, anchor="center")
-data_tree.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+data_tree.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
 
 data_tree.bind("<<TreeviewSelect>>", on_match_select)
 
