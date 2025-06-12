@@ -3,8 +3,10 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import operator
+import ast
 from main import run_account
 from module5 import load_data
+from module7 import get_champion_Square, get_champion_LS, get_champion_item
 import os
 
 root = tk.Tk()
@@ -166,11 +168,46 @@ def on_match_select(event):
     selected = data_tree.selection()
     if not selected:
         return
-    values = data_tree.item(selected[0])['values']
-    # Adjust indices if needed based on your column order
-    items = values[column_data.index("items")]
-    timestamp = values[column_data.index("timestamp")]
-    tk.messagebox.showinfo("Match Details", f"Items: {items}\nTimestamp: {timestamp}")
+    match = data_tree.item(selected[0], "values")
+
+    popup = tk.Toplevel()
+    popup.title("Match Details")
+
+    # Example: Show champion name and basic stats
+    champion = match[1]  # Adjust index based on your columns
+    kda = match[2]
+    cs = match[3]
+    kp = match[4]
+    win = match[5]
+    duration = match[6]
+    damage = match[7]
+    level = match[8]
+    vision = match[9]
+    match_date = match[10]
+    game_type = match[11]
+    patch = match[12]
+    items = match[13]
+
+    img_champion = get_champion_Square(champion)
+    img_label = ttk.Label(popup, image=img_champion)
+    img_label.image = img_champion  # Keep a reference to avoid garbage collection
+    img_label.pack(pady=5)
+
+    ttk.Label(popup, text=f"Champion: {champion}", font=("bold")).pack(pady=5)
+    ttk.Label(popup, text=f"KDA: {kda}").pack(pady=5)
+    ttk.Label(popup, text=f"CS: {cs}").pack(pady=5)
+    ttk.Label(popup, text=f"KP: {kp}").pack(pady=5)
+    ttk.Label(popup, text=f"Win: {win}").pack(pady=5)
+    ttk.Label(popup, text=f"Duration: {duration}").pack(pady=5)
+    ttk.Label(popup, text=f"Damage: {damage}").pack(pady=5)
+    ttk.Label(popup, text=f"Level: {level}").pack(pady=5)
+    ttk.Label(popup, text=f"Vision Score: {vision}").pack(pady=5)
+    ttk.Label(popup, text=f"Match Date: {match_date}").pack(pady=5)
+    ttk.Label(popup, text=f"Game Type: {game_type}").pack(pady=5)
+    ttk.Label(popup, text=f"Patch: {patch}").pack(pady=5)
+    ttk.Label(popup, text=f"Items: {items}").pack(pady=5)
+
+    
 
 # Function to handle changes in graph or stat type
 def on_graph_or_stat_change(*args):
@@ -201,7 +238,10 @@ def data_tab_load():
         kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
         cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
         kp = f"{row["kill_participation"] * 100:.0f}%"
-        duration = f"{int(row['duration']) // 60}:{int(row['duration']) % 60:02d}"
+        duration_seconds = int(row['duration'])
+        minutes = duration_seconds // 60
+        seconds = duration_seconds % 60
+        duration = f"{minutes}:{seconds:02d}"
         items = row.get("items", "No items")
         data_tree.insert("", "end", values=(
             user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
@@ -232,7 +272,7 @@ def apply_filter():
     }
 
     #filter by match_id
-    f_data= deduplicate_matches(load_data())
+    f_data = deduplicate_matches(load_data())
 
     # Advanced filter: cs < 7, kills > 10, etc.
     for op_str, op_func in ops.items():
@@ -280,7 +320,10 @@ def apply_filter():
         kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
         cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
         kp = f"{row["kill_participation"] * 100:.0f}%"
-        duration = f"{int(row['duration']) // 60}:{int(row['duration']) % 60:02d}"
+        duration_seconds = int(row['duration'])
+        minutes = duration_seconds // 60
+        seconds = duration_seconds % 60
+        duration = f"{minutes}:{seconds:02d}"
         items = row.get("items", "No items")
         data_tree.insert("", "end", values=(
             user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
@@ -412,3 +455,8 @@ data_tree.bind("<<TreeviewSelect>>", on_match_select)
 plot_graph([], stat_type_var.get(), graph_type_var.get())
 
 root.mainloop()
+
+
+"""
+goal: Display Data Visually , Interactive Data Pull, Visualize Progress, Show Raw Match Data, Make It User-Friendly, Handle Errors Gracefully, Keep UI & Data In Sync
+"""

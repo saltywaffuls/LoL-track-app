@@ -40,6 +40,17 @@ def get_ranked_data(puuid: str, region: str = "na1") -> dict: # league-v4 | /lol
 
     return ranked_data  # Return the ranked data as a dictionary
 
+#/lol/match/v5/matches/{matchId}/timeline
+def get_match_timeline(match_id: str, region: str = "americas") -> dict:
+    base_url = f"https://{region}.api.riotgames.com/lol/match/v5/matches/{match_id}/timeline"
+    
+    resp = requests.get(base_url, headers=HEADERS)  # Send the GET request with headers
+    resp.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx status codes)
+
+    match_timeline = resp.json()  # Parse the JSON response into a Python dictionary
+            
+    return match_timeline  # Return the match timeline as a dictionary
+
 def game_type(match_json: dict) -> str:
     queue_id = match_json["info"].get("queueId", 0)  # Extract queue ID from match JSON
     if queue_id == 420:
@@ -153,16 +164,6 @@ def xp_per_min(p: dict, timeline_json: dict, game_time: int) -> float:
                 last_xp = pdata.get("xp", 0)
     return last_xp / game_time if game_time > 0 else 0.0  # Calculate XP per minute
 
-
-def get_match_timeline(match_id: str, region: str = "americas") -> dict:
-    base_url = f"https://{region}.api.riotgames.com/lol/match/v5/matches/{match_id}/timeline"
-    
-    resp = requests.get(base_url, headers=HEADERS)  # Send the GET request with headers
-    resp.raise_for_status()  # Raise an exception for HTTP errors (4xx and 5xx status codes)
-
-    match_timeline = resp.json()  # Parse the JSON response into a Python dictionary
-            
-    return match_timeline  # Return the match timeline as a dictionary
 
 def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int]]:
     items = []  # Initialize an empty list to store item timelines
