@@ -51,6 +51,16 @@ def get_match_timeline(match_id: str, region: str = "americas") -> dict:
             
     return match_timeline  # Return the match timeline as a dictionary
 
+def get_item_data():
+    item_data_url = "https://ddragon.leagueoflegends.com/cdn/15.12.1/data/en_US/item.json"
+    
+    item_data = requests.get(item_data_url).json()["data"]
+
+    requests.raise_for_status()
+
+    return item_data
+
+
 def game_type(match_json: dict) -> str:
     queue_id = match_json["info"].get("queueId", 0)  # Extract queue ID from match JSON
     if queue_id == 420:
@@ -134,7 +144,7 @@ def kill_participation(p: dict, match_json: dict) -> float:
                      if x["teamId"] == p["teamId"])
     return your / team_kills if team_kills else 0.0
 
-def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int: # thiss may not be working as the data alwasy returns 500 invetigate
+def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int: # thiss may not be working as the data alwasy returns 500 invetigate i think it only pulls data from start of game
 
     ts_cutoff = game_time * 60_000  # Convert game time to milliseconds
     pid = p["participantId"]  # Extract participant ID
@@ -147,7 +157,7 @@ def gold_at_time(p: dict, timeline_json: dict, game_time: int) -> int: # thiss m
                 return pdata["totalGold"]
     return 0  # Return 0 if not found
 
-def cs_per_min(p: dict, match_json: dict) -> float:
+def cs_per_min(p: dict, match_json: dict) -> float: #look at this function it may not be needed
     total_cs = p["totalMinionsKilled"] + p["neutralMinionsKilled"]  # Calculate total CS
     game_duration = match_json["info"]["gameDuration"] / 60  # Convert game duration to minutes
     return total_cs / game_duration if game_duration > 0 else 0.0  # Calculate CS per minute
@@ -179,6 +189,27 @@ def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int]]:
 
     return items  # Return the list of item timelines
 
+def item_in_inventory(item_id: int,):
+    item = get_item_data.get(str(item_id))
+    if not item:
+        return False
+    return (
+        not item.get("into") and
+        item.get("gold", {}).get("purchasable", False) and
+        item.get("depth", 0) >= 3 and
+        item.get("tags") and "Consumable" not in item["tags"] and
+        "Trinket" not in item["tags"]
+    )
+
+def get_inventory(items):
+    inventory = []
+    for ts, item_id, event_type in items:
+        if event_type == "PURCHASE":
+            inventory.append(item_id)
+        elif event_type in ("SELL", "UNDO"):
+            if item_id in inventory:
+                inventory.remove(item_id)
+    return [item_id for item_id in inventory if item_in_inventory(item_id)]
 
 def compute_summary(stats: list[dict]) -> dict:
     

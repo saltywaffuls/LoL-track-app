@@ -3,9 +3,10 @@ import tkinter as tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import matplotlib.pyplot as plt
 import operator
-import ast
+from datetime import datetime
 from main import run_account
 from module5 import load_data
+from module3 import get_inventory
 from module7 import get_champion_Square, get_champion_LS, get_champion_item
 import os
 
@@ -56,13 +57,17 @@ def pull_data():
 def update_graph(name, tag):
     all_matches = load_data()
     filtered = [row for row in all_matches if row["summoner_id"].lower() == name.lower() and row["tag_line"].lower() == tag.lower()]
-    filtered.sort(key=lambda x: x["match_date"], reverse=True)
+    filtered.sort(
+    key=lambda x: datetime.strptime(x["match_date"], "%m-%d-%Y %H:%M:%S"),
+    reverse=True
+    )
 
     # Remove duplicates by match_id, keeping the first occurrence (most recent)
-    unique_filtered = deduplicate_matches(all_matches)
+    unique_filtered = deduplicate_matches(filtered)
 
     num_matches = int(entry_matches.get())
     recent = unique_filtered[:num_matches]
+
 
     # Clear previous rows
     for row in match_tree.get_children():
@@ -261,10 +266,11 @@ def data_tab_load():
         duration = f"{minutes}:{seconds:02d}"
         item_ids = [item_id for ts, item_id in row["items"][-6:]] if row["items"] else []
         item_str = " ".join(str(item_id) for item_id in item_ids) if item_ids else "No items"
+        match_id = row["match_id"]
 
         data_tree.insert("", "end", values=(
             user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
-            row["match_date"], row["game_type"], row["patch"], item_str
+            row["match_date"], row["game_type"], row["patch"], item_str , match_id
         ))
 
 def treeview_sort_column(tree, col, reverse):
