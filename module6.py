@@ -164,6 +164,7 @@ def on_focusout(event):
         entry_name.insert(0, 'Game Name + #na1')
         entry_name.config(fg='grey')
 
+# Function to handle match selection in the data tab
 def on_match_select(event):
     selected = data_tree.selection()
     if not selected:
@@ -207,6 +208,22 @@ def on_match_select(event):
     ttk.Label(popup, text=f"Patch: {patch}").pack(pady=5)
     ttk.Label(popup, text=f"Items: {items}").pack(pady=5)
 
+    item_str = match[13]  # e.g., "1031 3075 2055 3077 1011 3077"
+    item_ids = [x for x in item_str.split() if x.isdigit()] if item_str and item_str != "No items" else []
+
+    item_frame = ttk.Frame(popup)
+    item_frame.pack(pady=5)
+
+    for item_id in item_ids:
+        try:
+            img = get_champion_item(str(item_id))
+            lbl = ttk.Label(item_frame, image=img)
+            lbl.image = img  # Keep a reference!
+            lbl.pack(side="left", padx=2)
+        except Exception:
+            lbl = ttk.Label(item_frame, text=str(item_id))
+            lbl.pack(side="left", padx=2)
+
     
 
 # Function to handle changes in graph or stat type
@@ -242,10 +259,12 @@ def data_tab_load():
         minutes = duration_seconds // 60
         seconds = duration_seconds % 60
         duration = f"{minutes}:{seconds:02d}"
-        items = row.get("items", "No items")
+        item_ids = [item_id for ts, item_id in row["items"][-6:]] if row["items"] else []
+        item_str = " ".join(str(item_id) for item_id in item_ids) if item_ids else "No items"
+
         data_tree.insert("", "end", values=(
             user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
-            row["match_date"], row["game_type"], row["patch"], items
+            row["match_date"], row["game_type"], row["patch"], item_str
         ))
 
 def treeview_sort_column(tree, col, reverse):

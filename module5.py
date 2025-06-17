@@ -1,5 +1,6 @@
 import os  # Import the os module for file and path operations
 import csv  # Import the csv module for reading and writing CSV files
+import ast  # Import ast for safely evaluating strings to Python objects
 from datetime import datetime, timedelta  # Import datetime for handling date and time
 import json  # Import json for handling items field if it's in JSON format
 
@@ -92,17 +93,16 @@ def load_data(day: int = None) -> list[dict]:
             row["wins"] = int(row.get("wins", 0))
             row["losses"] = int(row.get("losses", 0))
             row["win_rate_ranked"] = float(row.get("win_rate_ranked", 0.0))
-            # items might be JSON or comma-list; handle missing safely:
+            
             items_str = row.get("items", "")
             try:
-                if items_str.startswith("["):
-                    row["items"] = json.loads(items_str)
-                elif items_str:
-                    row["items"] = items_str.split(",")
+                if items_str and items_str != "No items":
+                    row["items"] = ast.literal_eval(items_str)
                 else:
                     row["items"] = []
             except Exception:
                 row["items"] = []
+
             # Convert match_date string to datetime for comparison
             try:
                 match_date_dt = datetime.strptime(row["match_date"], "%Y-%m-%d %H:%M:%S")
