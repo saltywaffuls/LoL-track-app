@@ -34,6 +34,14 @@ notebook.add(data_tab, text="Data")
 notebook.add(graphs_tab, text="Graphs")
 notebook.add(setting_tab, text="Settings")
 
+all_data = []
+
+def load_data_on_startup():
+    global all_data
+    all_data = load_data()
+
+load_data_on_startup()
+
 def pull_data():
     try:
         full_name = entry_name.get()
@@ -44,45 +52,39 @@ def pull_data():
             tag = 'na1'  # default
 
         summary, _, _, _ = run_account(name, tag, entry_matches.get())
+        # Get number of matches (with default)
+        matches_str = entry_matches.get()
+        num_matches = int(matches_str) if matches_str.isdigit() and int(matches_str) > 0 else 10
+
+        # Reload all_data from CSV
+        load_data_on_startup()
+        dashboard_rows = []
+        try:
+            dashboard_rows = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
+        except Exception as e:
+            print("Error in dashboard_treeview_format:", e)
+
+        refresh_treeview(data_tree, data_treeview_format(all_data), column_data)
+
+        # Prepare dashboard rows
+        refresh_treeview(match_tree, dashboard_rows, dashboard_columns)
+
+        # Update graph with the same data
+        update_graph(name, tag, dashboard_rows)
+
         lbl_kda.config(text=f"KDA: {summary['avg_kda']:.2f}")
         lbl_cs.config(text=f"CS: {summary['avg_cs_per_min']:.2f}")
         lbl_kp.config(text=f"KP: {summary['avg_kp']:.2f}%")
         lbl_winrate.config(text=f"Winrate: {summary['win_rate']:.2%}")
 
-        update_graph(name, tag)  # Pass name and tag
-
     except Exception as e:
         error_label.config(text=f"Error: {e}")
-
-def update_graph(name, tag):
-    all_matches = load_data()
-    filtered = [row for row in all_matches if row["summoner_id"].lower() == name.lower() and row["tag_line"].lower() == tag.lower()]
-    filtered.sort(
-    key=lambda x: datetime.strptime(x["match_date"], "%m-%d-%Y %H:%M:%S"),
-    reverse=True
-    )
-
-    # Remove duplicates by match_id, keeping the first occurrence (most recent)
-    unique_filtered = deduplicate_matches(filtered)
-
-    num_matches = int(entry_matches.get())
-    recent = unique_filtered[:num_matches]
+    # Update graph with the same data
+    update_graph(name, tag, dashboard_rows)
 
 
-    # Clear previous rows
-    for row in match_tree.get_children():
-        match_tree.delete(row)
+def update_graph(name, tag, recent):
 
-    # Add new rows
-    for row in recent:
-        deaths = row["deaths"] if row["deaths"] > 0 else 1
-        kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/deaths:.2f})"
-        cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
-        kp = f"{row['kill_participation']*100:.0f}%"
-        win = "Win" if row["win"] else "Loss"
-        match_tree.insert("", "end", values=(
-            row["champion"], kda, cs, kp, win, row["match_id"], row["match_date"]
-        ))
 
     stat_list = []
     stat_type = stat_type_var.get()
@@ -155,14 +157,6 @@ def on_entry_click(event):
         entry_name.delete(0, "end")
         entry_name.config(fg='black')
 
-
-def on_tab_changed(event):
-    selected_tab = event.widget.select()
-    tab_text = event.widget.tab(selected_tab, "text")
-    if tab_text == "Data":
-        data_tab_load()
-
-notebook.bind("<<NotebookTabChanged>>", on_tab_changed)
 
 def on_focusout(event):
     if entry_name.get() == '':
@@ -242,36 +236,81 @@ def on_graph_or_stat_change(*args):
     update_graph(name, tag)
 
 
-def data_tab_load():
-    """
-    Load data into the data tab Treeview.
-    This function can be called when the data tab is selected.
-    """
-    data = load_data()
 
-   #filter by match_id
-    f_data = deduplicate_matches(data)
 
-    for row in data_tree.get_children():
-        data_tree.delete(row)
+def  data_treeview_format(all_data):
 
+    f_data = deduplicate_matches(all_data)
+    rows = []
     for row in f_data:
         user = f"{row['summoner_id']}#{row['tag_line']}" if row['tag_line'] else row['summoner_id']
         kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
         cs = f"{row['cs']:.0f} ({row['cs_per_min']:.1f}/min)"
-        kp = f"{row["kill_participation"] * 100:.0f}%"
+        kp = f"{row['kill_participation'] * 100:.0f}%"
         duration_seconds = int(row['duration'])
         minutes = duration_seconds // 60
         seconds = duration_seconds % 60
         duration = f"{minutes}:{seconds:02d}"
         item_ids = [item_id for ts, item_id in row["items"][-6:]] if row["items"] else []
         item_str = " ".join(str(item_id) for item_id in item_ids) if item_ids else "No items"
-        match_id = row["match_id"]
+        rows.append({
+            "user": user,
+            "champion": row["champion"],
+            "kda": kda,
+            "cs": cs,
+            "kp": kp,
+            "win": row["win"],
+            "duration": duration,
+            "damage": row["damage"],
+            "level": row["level"],
+            "vision": row["vision"],
+            "match_date": row["match_date"],
+            "game_type": row["game_type"],
+            "patch": row["patch"],
+            "item_str": item_str,
+            "match_id": row["match_id"],
+        })
+    return rows
 
-        data_tree.insert("", "end", values=(
-            user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
-            row["match_date"], row["game_type"], row["patch"], item_str , match_id
-        ))
+def  dashboard_treeview_format(all_data, name, tag, num_matches):
+    try:
+        num_matches = int(num_matches)
+        if num_matches <= 0:
+            num_matches = 10
+    except (ValueError, TypeError):
+        num_matches = 10
+
+    filtered = deduplicate_matches([
+        row for row in all_data
+        if row.get("summoner_id", "").lower() == name.lower() and row.get("tag_line", "").lower() == tag.lower()
+    ])
+    filtered.sort(key=lambda x: datetime.strptime(x.get("match_date", "01-01-1970 00:00:00"), "%m-%d-%Y %H:%M:%S"), reverse=True)
+    recent = filtered[:num_matches]
+    rows = []
+    for row in recent:
+        deaths = row.get("deaths", 1) or 1
+        kda = f"{row.get('kills', 0)}/{row.get('deaths', 0)}/{row.get('assists', 0)} ({(row.get('kills', 0)+row.get('assists', 0))/deaths:.2f})"
+        cs = f"{row.get('cs', 0):.0f} ({row.get('cs_per_min', 0):.1f}/min)"
+        kp = f"{row.get('kill_participation', 0)*100:.0f}%"
+        win = "Win" if row.get("win") else "Loss"
+        rows.append({
+            "champion": row.get("champion", ""),
+            "kda": kda,
+            "cs": cs,
+            "kp": kp,
+            "win": win,
+            "match_id": row.get("match_id", ""),
+            "match_date": row.get("match_date", ""),
+        })
+    return rows
+
+def refresh_treeview(tree, rows, columns):
+    tree.delete(*tree.get_children())
+    for row in rows:
+        values = tuple(row.get(col, "") for col in columns)
+        tree.insert("", "end", iid=row.get("match_id", ""), values=values)
+
+
 
 def treeview_sort_column(tree, col, reverse):
     data = [(tree.set(k, col), k) for k in tree.get_children('')]
@@ -297,7 +336,7 @@ def apply_filter():
     }
 
     #filter by match_id
-    f_data = deduplicate_matches(load_data())
+    f_data = deduplicate_matches(all_data)
 
     # Advanced filter: cs < 7, kills > 10, etc.
     for op_str, op_func in ops.items():
@@ -444,9 +483,11 @@ stat_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
 graph_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
 
 # Create a Treeview to display match data
-columns = ("champion", "kda", "cs", "kp", "win", "match_id", "match_date")
-match_tree = ttk.Treeview(dashboard_tab, columns=columns, show="headings", height=8, selectmode="browse")
-for col in columns:
+dashboard_columns = ("champion", "kda", "cs", "kp", "win", "match_id", "match_date")
+dashboard_row = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
+match_tree = ttk.Treeview(dashboard_tab, columns=dashboard_columns, show="headings", height=8, selectmode="browse")
+refresh_treeview(match_tree, dashboard_row, dashboard_columns)
+for col in dashboard_columns:
     match_tree.heading(col, text=col.capitalize(),
                       command=lambda _col=col: treeview_sort_column(match_tree, _col, False))
     match_tree.column(col, width=90, anchor="center")
@@ -467,7 +508,9 @@ column_data = (
     "user", "champion", "kda", "cs", "kp", "win", "duration", "damage", "level", "vision",
     "match_date", "game_type", "patch", "items"
 )
+data_row = data_treeview_format(all_data)
 data_tree = ttk.Treeview(data_tab, columns=column_data, show="headings", height=10)
+refresh_treeview(data_tree, data_row, column_data)
 for col in column_data:
     data_tree.heading(col, text=col.capitalize(),
                       command=lambda _col=col: treeview_sort_column(data_tree, _col, False))
