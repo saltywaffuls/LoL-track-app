@@ -52,25 +52,16 @@ def pull_data():
             tag = 'na1'  # default
 
         summary, _, _, _ = run_account(name, tag, entry_matches.get())
-        # Get number of matches (with default)
-        matches_str = entry_matches.get()
-        num_matches = int(matches_str) if matches_str.isdigit() and int(matches_str) > 0 else 10
-
+       
         # Reload all_data from CSV
         load_data_on_startup()
-        dashboard_rows = []
-        try:
-            dashboard_rows = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
-        except Exception as e:
-            print("Error in dashboard_treeview_format:", e)
+        
 
         refresh_treeview(data_tree, data_treeview_format(all_data), column_data)
 
-        # Prepare dashboard rows
-        refresh_treeview(match_tree, dashboard_rows, dashboard_columns)
-
-        # Update graph with the same data
-        update_graph(name, tag, dashboard_rows)
+        recent, rows = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
+        refresh_treeview(match_tree, rows, dashboard_columns)
+        update_graph(name, tag, recent)
 
         lbl_kda.config(text=f"KDA: {summary['avg_kda']:.2f}")
         lbl_cs.config(text=f"CS: {summary['avg_cs_per_min']:.2f}")
@@ -79,8 +70,6 @@ def pull_data():
 
     except Exception as e:
         error_label.config(text=f"Error: {e}")
-    # Update graph with the same data
-    update_graph(name, tag, dashboard_rows)
 
 
 def update_graph(name, tag, recent):
@@ -164,7 +153,7 @@ def on_focusout(event):
         entry_name.config(fg='grey')
 
 # Function to handle match selection in the data tab
-def on_match_select(event):
+def on_match_select(event, all_data=all_data):
     selected = data_tree.selection()
     if not selected:
         return
@@ -172,6 +161,22 @@ def on_match_select(event):
 
     popup = tk.Toplevel()
     popup.title("Match Details")
+
+    # Create a Notebook in the popup
+    notebook = ttk.Notebook(popup)
+    notebook.pack(fill="both", expand=True)
+
+    # Tab 1: Final Build
+    match_details_tab = ttk.Frame(notebook)
+    notebook.add(match_details_tab, text="Final Build")
+
+    # Tab 2: Timeline
+    timeline_tab = ttk.Frame(notebook)
+    notebook.add(timeline_tab, text="Timeline")
+
+    # --- Fill Final Build Tab ---
+    # Example: show final items (reuse your existing code)
+    ttk.Label(match_details_tab, text="Final Build Items:").pack()
 
     # Example: Show champion name and basic stats
     champion = match[1]  # Adjust index based on your columns
@@ -189,28 +194,28 @@ def on_match_select(event):
     items = match[13]
 
     img_champion = get_champion_Square(champion)
-    img_label = ttk.Label(popup, image=img_champion)
+    img_label = ttk.Label(match_details_tab, image=img_champion)
     img_label.image = img_champion  # Keep a reference to avoid garbage collection
     img_label.pack(pady=5)
 
-    ttk.Label(popup, text=f"Champion: {champion}", font=("bold")).pack(pady=5)
-    ttk.Label(popup, text=f"KDA: {kda}").pack(pady=5)
-    ttk.Label(popup, text=f"CS: {cs}").pack(pady=5)
-    ttk.Label(popup, text=f"KP: {kp}").pack(pady=5)
-    ttk.Label(popup, text=f"Win: {win}").pack(pady=5)
-    ttk.Label(popup, text=f"Duration: {duration}").pack(pady=5)
-    ttk.Label(popup, text=f"Damage: {damage}").pack(pady=5)
-    ttk.Label(popup, text=f"Level: {level}").pack(pady=5)
-    ttk.Label(popup, text=f"Vision Score: {vision}").pack(pady=5)
-    ttk.Label(popup, text=f"Match Date: {match_date}").pack(pady=5)
-    ttk.Label(popup, text=f"Game Type: {game_type}").pack(pady=5)
-    ttk.Label(popup, text=f"Patch: {patch}").pack(pady=5)
-    ttk.Label(popup, text=f"Items: {items}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Champion: {champion}", font=("bold")).pack(pady=5)
+    ttk.Label(match_details_tab, text=f"KDA: {kda}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"CS: {cs}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"KP: {kp}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Win: {win}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Duration: {duration}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Damage: {damage}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Level: {level}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Vision Score: {vision}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Match Date: {match_date}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Game Type: {game_type}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Patch: {patch}").pack(pady=5)
+    ttk.Label(match_details_tab, text=f"Items: {items}").pack(pady=5)
 
     item_str = match[13]  # e.g., "1031 3075 2055 3077 1011 3077"
     item_ids = [x for x in item_str.split() if x.isdigit()] if item_str and item_str != "No items" else []
 
-    item_frame = ttk.Frame(popup)
+    item_frame = ttk.Frame(match_details_tab)
     item_frame.pack(pady=5)
 
     for item_id in item_ids:
@@ -223,7 +228,9 @@ def on_match_select(event):
             lbl = ttk.Label(item_frame, text=str(item_id))
             lbl.pack(side="left", padx=2)
 
-    
+    # --- Fill Timeline Tab ---
+    ttk.Label(timeline_tab, text="Item Timeline:").pack()
+    # ... add your timeline widgets here ...
 
 # Function to handle changes in graph or stat type
 def on_graph_or_stat_change(*args):
@@ -233,7 +240,8 @@ def on_graph_or_stat_change(*args):
     else:
         name = full_name
         tag = 'na1'
-    update_graph(name, tag)
+    recent, _ = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
+    update_graph(name, tag, recent)
 
 
 
@@ -302,7 +310,7 @@ def  dashboard_treeview_format(all_data, name, tag, num_matches):
             "match_id": row.get("match_id", ""),
             "match_date": row.get("match_date", ""),
         })
-    return rows
+    return recent, rows
 
 def refresh_treeview(tree, rows, columns):
     tree.delete(*tree.get_children())
@@ -484,7 +492,7 @@ graph_type_combo.bind("<<ComboboxSelected>>", on_graph_or_stat_change)
 
 # Create a Treeview to display match data
 dashboard_columns = ("champion", "kda", "cs", "kp", "win", "match_id", "match_date")
-dashboard_row = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
+_, dashboard_row = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
 match_tree = ttk.Treeview(dashboard_tab, columns=dashboard_columns, show="headings", height=8, selectmode="browse")
 refresh_treeview(match_tree, dashboard_row, dashboard_columns)
 for col in dashboard_columns:
