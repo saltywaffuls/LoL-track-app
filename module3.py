@@ -56,8 +56,6 @@ def get_item_data():
     
     item_data = requests.get(item_data_url).json()["data"]
 
-    requests.raise_for_status()
-
     return item_data
 
 
@@ -175,31 +173,30 @@ def xp_per_min(p: dict, timeline_json: dict, game_time: int) -> float:
     return last_xp / game_time if game_time > 0 else 0.0  # Calculate XP per minute
 
 
-def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int]]:
+def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int,str]]:
     items = []  # Initialize an empty list to store item timelines
     pid = p["participantId"]  # Extract participant ID
 
     for frame in timeline_json["info"]["frames"]:
         ts = frame["timestamp"]  # Extract timestamp
         for ev in frame.get("events", []):
-            if ev["type"] == "ITEM_PURCHASED" and ev.get("participantId") == pid:
-                items.append((ts, ev["itemId"]))
-            elif ev["type"] == "ITEM_SOLD" and ev.get("participantId") == pid:
-                items.append((ts, ev["itemId"]))
+            if ev.get("participantId") == pid:
+                if ev["type"] == "ITEM_PURCHASED":
+                    items.append((ts, ev["itemId"], "PURCHASE"))
+                elif ev["type"] == "ITEM_SOLD":
+                    items.append((ts, ev["itemId"], "SELL"))
+                elif ev["type"] == "ITEM_UNDO":
+                    items.append((ts, ev["itemId"], "UNDO"))
 
     return items  # Return the list of item timelines
 
-def item_in_inventory(item_id: int,):
-    item = get_item_data.get(str(item_id))
+def item_in_inventory(item_id: int):
+    item = get_item_data().get(str(item_id))
     if not item:
         return False
-    return (
-        not item.get("into") and
-        item.get("gold", {}).get("purchasable", False) and
-        item.get("depth", 0) >= 3 and
-        item.get("tags") and "Consumable" not in item["tags"] and
-        "Trinket" not in item["tags"]
-    )
+    # Only filter out consumables and trinkets
+    tags = item.get("tags", [])
+    return "Consumable" not in tags and "Trinket" not in tags
 
 def get_inventory(items):
     inventory = []

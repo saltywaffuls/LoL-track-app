@@ -6,9 +6,10 @@ import operator
 from datetime import datetime
 from main import run_account
 from module5 import load_data
-from module3 import get_inventory
+from module3 import get_inventory, get_item_data
 from module7 import get_champion_Square, get_champion_LS, get_champion_item
 import os
+import ast
 
 root = tk.Tk()
 root.title("LoL Tracker")
@@ -153,11 +154,34 @@ def on_focusout(event):
         entry_name.config(fg='grey')
 
 # Function to handle match selection in the data tab
-def on_match_select(event, all_data=all_data):
+def on_match_select(event):
     selected = data_tree.selection()
     if not selected:
         return
-    match = data_tree.item(selected[0], "values")
+    match_id = selected[0]  # The iid is the match_id
+
+    # Find the full row in all_data
+    full_row = next((row for row in all_data if str(row["match_id"]) == str(match_id)), None)
+    if not full_row:
+        error_label.config(text="Match not found in data.")
+        return
+
+    champion = full_row["champion"]
+    kda = f"{full_row['kills']}/{full_row['deaths']}/{full_row['assists']} ({(full_row['kills']+full_row['assists'])/(full_row['deaths'] if full_row['deaths'] > 0 else 1):.2f})"
+    cs = f"{full_row['cs']:.0f} ({full_row['cs_per_min']:.1f}/min)"
+    kp = f"{full_row['kill_participation'] * 100:.0f}%"
+    win = full_row["win"]
+    duration_seconds = int(full_row['duration'])
+    minutes = duration_seconds // 60
+    seconds = duration_seconds % 60
+    duration = f"{minutes}:{seconds:02d}"
+    damage = full_row["damage"]
+    level = full_row["level"]
+    vision = full_row["vision"]
+    match_date = full_row["match_date"]
+    game_type = full_row["game_type"]
+    patch = full_row["patch"]
+    items = full_row["items"]
 
     popup = tk.Toplevel()
     popup.title("Match Details")
@@ -174,24 +198,6 @@ def on_match_select(event, all_data=all_data):
     timeline_tab = ttk.Frame(notebook)
     notebook.add(timeline_tab, text="Timeline")
 
-    # --- Fill Final Build Tab ---
-    # Example: show final items (reuse your existing code)
-    ttk.Label(match_details_tab, text="Final Build Items:").pack()
-
-    # Example: Show champion name and basic stats
-    champion = match[1]  # Adjust index based on your columns
-    kda = match[2]
-    cs = match[3]
-    kp = match[4]
-    win = match[5]
-    duration = match[6]
-    damage = match[7]
-    level = match[8]
-    vision = match[9]
-    match_date = match[10]
-    game_type = match[11]
-    patch = match[12]
-    items = match[13]
 
     img_champion = get_champion_Square(champion)
     img_label = ttk.Label(match_details_tab, image=img_champion)
@@ -212,25 +218,68 @@ def on_match_select(event, all_data=all_data):
     ttk.Label(match_details_tab, text=f"Patch: {patch}").pack(pady=5)
     ttk.Label(match_details_tab, text=f"Items: {items}").pack(pady=5)
 
-    item_str = match[13]  # e.g., "1031 3075 2055 3077 1011 3077"
-    item_ids = [x for x in item_str.split() if x.isdigit()] if item_str and item_str != "No items" else []
+    # Parse items
+    if isinstance(items, str):
+        try:
+            items_list = ast.literal_eval(items)
+        except Exception:
+            items_list = []
+    else:
+        items_list = items
 
+    if items_list and len(items_list[0]) == 2:
+        items_list = [(ts, item_id, "PURCHASE") for ts, item_id in items_list]
+
+    final_inventory = get_inventory(items_list)
+
+    # Separate completed and component items
+
+
+    item_data = get_item_data()
+    completed = []
+    components = []
+
+    for item_id in final_inventory:
+        item = item_data.get(str(item_id))
+        if not item:
+            continue
+        tags = item.get("tags", [])
+        # Completed: no further upgrades, purchasable, not consumable/trinket
+        if not item.get("into") and item.get("gold", {}).get("purchasable", False) and \
+           "Consumable" not in tags and "Trinket" not in tags:
+            completed.append(item_id)
+        elif "Consumable" not in tags and "Trinket" not in tags:
+            components.append(item_id)
+
+    # Prioritize completed items, then fill with components up to 6
+    final_display = completed[:6]
+    if len(final_display) < 6:
+        final_display += components[:6 - len(final_display)]
+
+    ttk.Label(match_details_tab, text="Final Inventory:").pack(pady=5)
     item_frame = ttk.Frame(match_details_tab)
     item_frame.pack(pady=5)
 
-    for item_id in item_ids:
+    item_images = []
+    for item_id in final_display:
         try:
             img = get_champion_item(str(item_id))
+            item_images.append(img)
             lbl = ttk.Label(item_frame, image=img)
-            lbl.image = img  # Keep a reference!
             lbl.pack(side="left", padx=2)
-        except Exception:
+        except Exception as e:
+            print(f"Failed to load art for {item_id}: {e}")
             lbl = ttk.Label(item_frame, text=str(item_id))
             lbl.pack(side="left", padx=2)
+
+    popup.item_images = item_images  # Prevent garbage collection
 
     # --- Fill Timeline Tab ---
     ttk.Label(timeline_tab, text="Item Timeline:").pack()
     # ... add your timeline widgets here ...
+
+    
+
 
 # Function to handle changes in graph or stat type
 def on_graph_or_stat_change(*args):
@@ -242,8 +291,6 @@ def on_graph_or_stat_change(*args):
         tag = 'na1'
     recent, _ = dashboard_treeview_format(all_data, name, tag, entry_matches.get())
     update_graph(name, tag, recent)
-
-
 
 
 def  data_treeview_format(all_data):
