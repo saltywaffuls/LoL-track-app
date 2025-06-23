@@ -181,13 +181,16 @@ def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int,str]
         ts = frame["timestamp"]  # Extract timestamp
         for ev in frame.get("events", []):
             if ev.get("participantId") == pid:
+                # Use .get() to handle both 'itemId' and 'item_id'
+                item_id = ev.get("itemId", ev.get("item_id"))
+                if item_id is None:
+                    continue
                 if ev["type"] == "ITEM_PURCHASED":
-                    items.append((ts, ev["itemId"], "PURCHASE"))
+                    items.append((ts, item_id, "PURCHASE"))
                 elif ev["type"] == "ITEM_SOLD":
-                    items.append((ts, ev["itemId"], "SELL"))
+                    items.append((ts, item_id, "SELL"))
                 elif ev["type"] == "ITEM_UNDO":
-                    items.append((ts, ev["itemId"], "UNDO"))
-
+                    items.append((ts, item_id, "UNDO"))
     return items  # Return the list of item timelines
 
 def item_in_inventory(item_id: int):
