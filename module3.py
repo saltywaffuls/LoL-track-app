@@ -174,7 +174,7 @@ def xp_per_min(p: dict, timeline_json: dict, game_time: int) -> float:
 
 
 def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int,str]]:
-    items = []  # Initialize an empty list to store item timelines
+    timeline = []  # Initialize an empty list to store item timelines
     pid = p["participantId"]  # Extract participant ID
 
     for frame in timeline_json["info"]["frames"]:
@@ -186,30 +186,33 @@ def extract_item_timeline(p:dict, timeline_json:dict) -> list[tuple[int,int,str]
                 if item_id is None:
                     continue
                 if ev["type"] == "ITEM_PURCHASED":
-                    items.append((ts, item_id, "PURCHASE"))
+                    timeline.append((ts, item_id, "PURCHASE"))
                 elif ev["type"] == "ITEM_SOLD":
-                    items.append((ts, item_id, "SELL"))
+                    timeline.append((ts, item_id, "SELL"))
                 elif ev["type"] == "ITEM_UNDO":
-                    items.append((ts, item_id, "UNDO"))
-    return items  # Return the list of item timelines
+                    timeline.append((ts, item_id, "UNDO"))
+    return timeline  # Return the list of item timelines
 
-def item_in_inventory(item_id: int):
-    item = get_item_data().get(str(item_id))
-    if not item:
-        return False
-    # Only filter out consumables and trinkets
-    tags = item.get("tags", [])
-    return "Consumable" not in tags and "Trinket" not in tags
-
-def get_inventory(items):
+def get_inventory(item_events):
     inventory = []
-    for ts, item_id, event_type in items:
-        if event_type == "PURCHASE":
+    item_data = get_item_data()
+    for ts, item_id, action in sorted(item_events, key=lambda x: x[0]):
+        item_id_str = str(item_id)
+        if action == "PURCHASE":
+            # Remove components if this is a full item with components
+            item = item_data.get(item_id_str)
+            if item and "from" in item:
+                for comp_id in item["from"]:
+                    comp_id_int = int(comp_id)
+                    if comp_id_int in inventory:
+                        inventory.remove(comp_id_int)
             inventory.append(item_id)
-        elif event_type in ("SELL", "UNDO"):
+        elif action == "SELL":
             if item_id in inventory:
                 inventory.remove(item_id)
-    return [item_id for item_id in inventory if item_in_inventory(item_id)]
+        elif action == "UNDO":
+            pass
+    return inventory  # Return the last 6 items (LoL inventory size)
 
 def compute_summary(stats: list[dict]) -> dict:
     

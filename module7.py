@@ -2,12 +2,12 @@ from PIL import Image, ImageTk
 import requests
 import io
 
-def get_champion_data(champion_name: str, patch_version: str = "15.12.1"):
+def get_champion_data(champion_name: str, patch_version: str = "15.13.1"):
     """
 
     """
     # Construct the URL for the champion's image
-    url = f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/data/en_US/champion/{champion_name.capitalize()}.json"
+    url = f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/data/en_US/champion/{champion_name}.json"
     
     # Make the request to fetch the image
     resp = requests.get(url)
@@ -17,11 +17,11 @@ def get_champion_data(champion_name: str, patch_version: str = "15.12.1"):
 
     return data  # Return the champion data
 
-def get_champion_Square(champion_name: str, patch_version: str = "15.12.1"):
+def get_champion_Square(champion_name: str, patch_version: str = "15.13.1"):
     #gets champion square art
 
     # Construct the URL for the champion's image
-    url = f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/img/champion/{champion_name.capitalize()}.png"
+    url = f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/img/champion/{champion_name}.png"
     
     # Make the request to fetch the image
     resp = requests.get(url)
@@ -31,11 +31,11 @@ def get_champion_Square(champion_name: str, patch_version: str = "15.12.1"):
     asset_img = ImageTk.PhotoImage(asset)  # Convert the image to a format suitable for Tkinter
     return asset_img  # Return the image object
 
-def get_champion_LS(champion_name: str, patch_version: str = "15.12.1"):
+def get_champion_LS(champion_name: str, patch_version: str = "15.13.1"):
     #gets loading screen art
 
     # Construct the URL for the champion's image
-    url = f"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{champion_name.capitalize()}_0.jpg"
+    url = f"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{champion_name}_0.jpg"
     
     # Make the request to fetch the image
     resp = requests.get(url)
@@ -45,7 +45,7 @@ def get_champion_LS(champion_name: str, patch_version: str = "15.12.1"):
     asset_img = ImageTk.PhotoImage(asset)  # Convert the image to a format suitable for Tkinter
     return asset_img  # Return the image object
 
-def get_champion_item(item_id: str, patch_version: str = "15.12.1"):
+def get_champion_item(item_id: str, patch_version: str = "15.13.1"):
 
     url = f"https://ddragon.leagueoflegends.com/cdn/{patch_version}/img/item/{item_id}.png"
 

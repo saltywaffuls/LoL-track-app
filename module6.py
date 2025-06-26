@@ -197,6 +197,10 @@ def start_gui():
         else:
             name = full_name
             tag = 'na1'
+        # Always recompute recent using the current matches value
+        recent, _ = dashboard_treeview_format(
+            all_data, name, tag, entry_matches.get()
+        )
         update_graph(name, tag, recent)
 
     graph_type_var.trace("w", on_graph_or_stat_change)
@@ -287,8 +291,12 @@ def start_gui():
 
     def plot_graph(stat_list, stat_type="KDA", graph_type="Line"):
         nonlocal plot_canvas
+        # Safely destroy the previous canvas if it exists
         if plot_canvas is not None:
-            plot_canvas.get_tk_widget().destroy()
+            try:
+                plot_canvas.get_tk_widget().destroy()
+            except Exception:
+                pass
             plot_canvas = None
         fig, ax = plt.subplots(figsize=(7, 4), dpi=100)
         x = range(1, len(stat_list)+1)
@@ -377,7 +385,7 @@ def start_gui():
         ttk.Label(match_details_tab, text=f"Match Date: {match_date}").pack(pady=5)
         ttk.Label(match_details_tab, text=f"Game Type: {game_type}").pack(pady=5)
         ttk.Label(match_details_tab, text=f"Patch: {patch}").pack(pady=5)
-        ttk.Label(match_details_tab, text=f"Items: {items}").pack(pady=5)
+        #ttk.Label(match_details_tab, text=f"Items: {items}").pack(pady=5)
 
         # Parse items
         if isinstance(items, str):
