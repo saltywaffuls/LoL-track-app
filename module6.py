@@ -368,6 +368,8 @@ def start_gui():
         notebook.add(match_details_tab, text="Final Build")
         timeline_tab = ttk.Frame(notebook)
         notebook.add(timeline_tab, text="Timeline")
+        graph_info_tab = ttk.Frame(notebook)
+        notebook.add(graph_info_tab, text="Graph Info")
 
         img_champion = get_champion_Square(champion)
         img_label = ttk.Label(match_details_tab, image=img_champion)
@@ -434,6 +436,68 @@ def start_gui():
         popup.item_images = item_images
 
         ttk.Label(timeline_tab, text="Item Timeline:").pack()
+
+        # --- Item Timeline Visualization ---
+        # items_list is already parsed above and contains (timestamp, item_id, action)
+        items_per_row = 10  # Number of items per row
+        row_height = 125    # Increased for more space
+        icon_size = 48
+        spacing = 100
+
+        if items_list:
+            sorted_items = sorted(items_list, key=lambda x: x[0])
+            num_rows = (len(sorted_items) + items_per_row - 1) // items_per_row
+            canvas_width = max(800, items_per_row * spacing + 40)
+            canvas_height = max(120, num_rows * row_height + 40)
+            timeline_canvas = tk.Canvas(timeline_tab, bg="white", height=canvas_height, width=canvas_width)
+            timeline_canvas.pack(fill="x", padx=10, pady=10)
+
+            positions = []  # Store icon center positions for arrows
+
+            for idx, (ts, item_id, action) in enumerate(sorted_items):
+                if action not in ("PURCHASE", "SELL"):
+                    continue
+                row = idx // items_per_row
+                col = idx % items_per_row
+                x = 10 + col * spacing
+                y = 10 + row * row_height
+                # Get item art
+                try:
+                    img = get_champion_item(str(item_id))
+                except Exception:
+                    img = None
+                # Draw item icon
+                if img:
+                    timeline_canvas.create_image(x, y, anchor="nw", image=img)
+                    if not hasattr(timeline_canvas, "images"):
+                        timeline_canvas.images = []
+                    timeline_canvas.images.append(img)
+                # Save center position for arrows
+                positions.append((x + icon_size // 2, y + icon_size // 2, row, col, ts))
+                # Draw timestamp below icon
+                seconds = int(ts // 1000)
+                minutes = seconds // 60
+                sec = seconds % 60
+                ts_str = f"{minutes}:{sec:02d}"
+                timeline_canvas.create_text(
+                    x + icon_size // 2, y + icon_size + 15,
+                    text=ts_str, font=("Arial", 9, "bold"), anchor="n"
+                )
+                # Draw action below timestamp
+                timeline_canvas.create_text(
+                    x + icon_size // 2, y + icon_size + 28,
+                    text=action, font=("Arial", 7), anchor="n"
+                )
+
+            # Draw arrows between icons in the same row
+            for i in range(len(positions) - 1):
+                x1, y1, row1, col1, ts1 = positions[i]
+                x2, y2, row2, col2, ts2 = positions[i + 1]
+                if row1 == row2 and ts1 != ts2:  # Only connect if not grouped
+                    timeline_canvas.create_line(
+                        x1 + icon_size // 2, y1, x2 - icon_size // 2, y2,
+                        arrow=tk.LAST, width=2, fill="#888"
+                    )
 
     data_tree.bind("<<TreeviewSelect>>", on_match_select)
 
