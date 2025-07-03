@@ -499,6 +499,82 @@ def start_gui():
                         arrow=tk.LAST, width=2, fill="#888"
                     )
 
+        # --- Stats Comparison Graphs in Match Details Popup ---
+        stats_to_plot = [
+            ("KDA", lambda row: (row["kills"] + row["assists"]) / (row["deaths"] if row["deaths"] > 0 else 1)),
+            ("CS", lambda row: row["cs"]),
+            ("KP", lambda row: row["kill_participation"] * 100),
+            ("Winrate", lambda row: 100 if row["win"] in [True, "True", "true", 1, "1"] else 0),
+            ("Damage", lambda row: row["damage"]),
+            ("Vision/min", lambda row: row.get("vision", 0) / (row["duration"] / 60) if row.get("duration", 0) else 0),
+            # Add more stats as needed
+        ]
+
+        graph_types = ["Bar", "Line", "Scatter"]
+        graph_type_var = tk.StringVar(value="Bar")
+
+        # Create the dropdown and label ONCE, outside plot_stat_graphs
+        ttk.Label(graph_info_tab, text="Graph Type:").pack(anchor="w", padx=10, pady=(10,0))
+        graph_type_combo = ttk.Combobox(graph_info_tab, textvariable=graph_type_var, values=graph_types, state="readonly", width=10)
+        graph_type_combo.pack(anchor="w", padx=10, pady=(0,10))
+
+        # Make the tab scalable
+        graph_info_tab.rowconfigure(0, weight=1)
+        graph_info_tab.columnconfigure(0, weight=1)
+        popup.rowconfigure(0, weight=1)
+        popup.columnconfigure(0, weight=1)
+
+        def plot_stat_graphs():
+            # Remove all widgets except the combobox and label
+            for widget in graph_info_tab.winfo_children():
+                if isinstance(widget, ttk.Combobox) or (isinstance(widget, ttk.Label) and widget.cget("text") == "Graph Type:"):
+                    continue
+                widget.destroy()
+
+            champ = full_row["champion"]
+            # Get all games for this champion, sorted by match_date (oldest to newest)
+            champ_games = [row for row in all_data if row["champion"] == champ]
+            champ_games.sort(key=lambda r: r.get("match_date", ""))
+
+            # Find the index of the selected match
+            selected_idx = next((i for i, row in enumerate(champ_games) if str(row["match_id"]) == str(full_row["match_id"])), None)
+
+            for stat_name, stat_func in stats_to_plot:
+                stat_values = [stat_func(row) for row in champ_games]
+                x = list(range(1, len(stat_values) + 1))
+                graph_type = graph_type_var.get()
+
+                fig, ax = plt.subplots(figsize=(max(4, len(stat_values)), 3), dpi=100)
+
+                # Plot all games
+                if graph_type == "Bar":
+                    bars = ax.bar(x, stat_values, color=["#F5A623" if i == selected_idx else "#4A90E2" for i in range(len(stat_values))])
+                elif graph_type == "Line":
+                    ax.plot(x, stat_values, color="#4A90E2", marker="o")
+                    ax.plot([x[selected_idx]], [stat_values[selected_idx]], marker="o", color="#F44336", markersize=12)  # Highlight selected
+                elif graph_type == "Scatter":
+                    ax.scatter(x, stat_values, color=["#F44336" if i == selected_idx else "#4A90E2" for i in range(len(stat_values))], s=80)
+                else:
+                    ax.plot(x, stat_values, color="#4A90E2", marker="o")
+                    ax.plot([x[selected_idx]], [stat_values[selected_idx]], marker="o", color="#F44336", markersize=12)
+
+                # Annotate values
+                for i, v in enumerate(stat_values):
+                    ax.text(x[i], v, f"{v:.2f}", ha='center', va='bottom', fontsize=9, color="#F44336" if i == selected_idx else "blue")
+
+                ax.set_title(f"{stat_name} for {champ} ({len(stat_values)} games)")
+                ax.set_xlabel("Game # (oldest to newest)")
+                ax.set_ylabel(stat_name)
+                ax.set_ylim(bottom=0)
+                ax.grid(True, linestyle='--', alpha=0.5)
+                fig.tight_layout()
+                canvas = FigureCanvasTkAgg(fig, master=graph_info_tab)
+                canvas.get_tk_widget().pack(side="top", fill="both", expand=True, padx=10, pady=10)
+                canvas.draw()
+
+        graph_type_combo.bind("<<ComboboxSelected>>", lambda _: plot_stat_graphs())
+        plot_stat_graphs()
+
     data_tree.bind("<<TreeviewSelect>>", on_match_select)
 
     def apply_filter():
