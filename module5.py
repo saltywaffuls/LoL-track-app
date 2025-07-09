@@ -9,7 +9,7 @@ import json  # Import json for handling items field if it's in JSON format
 CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
-FIELDS = ["summoner_id", "tag_line", "match_id", "patch", "match_date", "game_type", "duration", "win", "champion", "kills", "deaths", "assists", "cs", "damage", "kill_participation", "gold", "vision",
+FIELDS = ["summoner_id", "tag_line", "match_id", "patch", "match_date", "game_type", "duration", "win", "champion", "lane", "kills", "deaths", "assists", "cs", "damage", "kill_participation", "gold", "vision",
            "xp_per_min", "cs_per_min", "gold_per_min", "level", "items", "tier", "rank", "leaguePoints", "wins", "losses", "win_rate_ranked", "ingest_date"]
 
 def init_storage():
@@ -75,6 +75,7 @@ def load_data(day: int = None) -> list[dict]:
             row["cs"] = float(row["cs"])
             row["win"] = row["win"] == "True"
             row["champion"] = row["champion"]
+            row["lane"] = row.get("lane", "Unknown")  
             row["duration"] = float(row["duration"])
             row["match_date"] = row["match_date"]
             row["tag_line"] = row.get("tag_line", "na1")

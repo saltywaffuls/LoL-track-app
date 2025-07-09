@@ -91,6 +91,7 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
                 "game_type": game_type(match_json),  # Determine the game type
                 "duration":  match_json["info"]["gameDuration"] / 60,
                 "champion": P["championName"],  # Extract champion name
+                "lane" : P["individualPosition"],  # Extract lane
                 "kills": P["kills"],  # Extract kills
                 "deaths": P["deaths"],  # Extract deaths
                 "assists": P["assists"],  # Extract assists
