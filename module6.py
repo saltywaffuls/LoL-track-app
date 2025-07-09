@@ -139,6 +139,7 @@ def start_gui():
         all_data = load_data()
 
     all_data = []
+    current_data_rows = []
     load_data_on_startup()
 
     # --- Dashboard Widgets ---
@@ -362,6 +363,8 @@ def start_gui():
 
         popup = tk.Toplevel()
         popup.title("Match Details")
+        popup.minsize(900, 600)
+        popup.maxsize(1200, 900)
         notebook = ttk.Notebook(popup)
         notebook.pack(fill="both", expand=True)
         match_details_tab = ttk.Frame(notebook)
@@ -518,6 +521,11 @@ def start_gui():
         graph_type_combo = ttk.Combobox(graph_info_tab, textvariable=graph_type_var, values=graph_types, state="readonly", width=10)
         graph_type_combo.pack(anchor="w", padx=10, pady=(0,10))
 
+        stat_options = ["KDA", "CS", "KP", "Winrate", "Damage", "Vision/min"]
+        stat_var = tk.StringVar(value="KDA")
+        stat_combo = ttk.Combobox(graph_info_tab, textvariable=stat_var, values=stat_options, state="readonly")
+        stat_combo.pack(anchor="w", padx=10, pady=(10,0))
+
         # Make the tab scalable
         graph_info_tab.rowconfigure(0, weight=1)
         graph_info_tab.columnconfigure(0, weight=1)
@@ -533,16 +541,21 @@ def start_gui():
 
             champ = full_row["champion"]
             # Get all games for this champion, sorted by match_date (oldest to newest)
-            champ_games = [row for row in all_data if row["champion"] == champ]
+            champ_games = deduplicate_matches([row for row in all_data if row["champion"] == champ])
             champ_games.sort(key=lambda r: r.get("match_date", ""))
 
             # Find the index of the selected match
             selected_idx = next((i for i, row in enumerate(champ_games) if str(row["match_id"]) == str(full_row["match_id"])), None)
 
+            selected_stat = stat_var.get()
             for stat_name, stat_func in stats_to_plot:
+                if stat_name != selected_stat:
+                    continue
                 stat_values = [stat_func(row) for row in champ_games]
                 x = list(range(1, len(stat_values) + 1))
                 graph_type = graph_type_var.get()
+
+                avg_value = sum(stat_values) / len(stat_values) if stat_values else 0
 
                 fig, ax = plt.subplots(figsize=(max(4, len(stat_values)), 3), dpi=100)
 
@@ -558,9 +571,41 @@ def start_gui():
                     ax.plot(x, stat_values, color="#4A90E2", marker="o")
                     ax.plot([x[selected_idx]], [stat_values[selected_idx]], marker="o", color="#F44336", markersize=12)
 
+                # Calculate account-wide average for the selected stat
+                account_stat_values = [stat_func(row) for row in deduplicate_matches(all_data)]
+                account_avg = sum(account_stat_values) / len(account_stat_values) if account_stat_values else 0
+
+                # Plot average line
+                if stat_name == "CS":
+                    cs_per_min_values = [row.get("cs_per_min", 0) for row in champ_games]
+                    avg_cspm = sum(cs_per_min_values) / len(cs_per_min_values) if cs_per_min_values else 0
+                    # Champion average
+                    ax.axhline(avg_value, color="green", linestyle="--", linewidth=2, label=f"Avg: {avg_value:.2f} ({avg_cspm:.2f}/min)")
+                    # Account-wide average
+                    # Calculate account-wide cs_per_min
+                    all_cs_per_min = [row.get("cs_per_min", 0) for row in deduplicate_matches(all_data)]
+                    account_avg_cspm = sum(all_cs_per_min) / len(all_cs_per_min) if all_cs_per_min else 0
+                    ax.axhline(account_avg, color="orange", linestyle=":", linewidth=2, label=f"Account Avg: {account_avg:.2f} ({account_avg_cspm:.2f}/min)")
+                else:
+                    ax.axhline(avg_value, color="green", linestyle="--", linewidth=2, label=f"Avg: {avg_value:.2f}")
+                    ax.axhline(account_avg, color="orange", linestyle=":", linewidth=2, label=f"Account Avg: {account_avg:.2f}")
+                ax.legend(loc="upper right", fontsize=9)
+
                 # Annotate values
                 for i, v in enumerate(stat_values):
-                    ax.text(x[i], v, f"{v:.2f}", ha='center', va='bottom', fontsize=9, color="#F44336" if i == selected_idx else "blue")
+                    if stat_name == "CS":
+                        cs = int(champ_games[i].get("cs", 0))
+                        cspm = champ_games[i].get("cs_per_min", 0)
+                        label = f"{cs} ({cspm:.1f})"
+                    elif stat_name == "KDA":
+                        kills = champ_games[i].get("kills", 0)
+                        deaths = champ_games[i].get("deaths", 0)
+                        assists = champ_games[i].get("assists", 0)
+                        kda_val = (kills + assists) / (deaths if deaths > 0 else 1)
+                        label = f"{kills}/{deaths}/{assists} ({kda_val:.2f})"
+                    else:
+                        label = f"{v:.2f}"
+                    ax.text(x[i], v, label, ha='center', va='bottom', fontsize=9, color="#F44336" if i == selected_idx else "blue")
 
                 ax.set_title(f"{stat_name} for {champ} ({len(stat_values)} games)")
                 ax.set_xlabel("Game # (oldest to newest)")
@@ -571,8 +616,10 @@ def start_gui():
                 canvas = FigureCanvasTkAgg(fig, master=graph_info_tab)
                 canvas.get_tk_widget().pack(side="top", fill="both", expand=True, padx=10, pady=10)
                 canvas.draw()
+                plt.close(fig)  # <-- Add this line to close the figure
 
         graph_type_combo.bind("<<ComboboxSelected>>", lambda _: plot_stat_graphs())
+        stat_combo.bind("<<ComboboxSelected>>", lambda _: plot_stat_graphs())
         plot_stat_graphs()
 
     data_tree.bind("<<TreeviewSelect>>", on_match_select)
@@ -621,8 +668,10 @@ def start_gui():
                     if query.lower() in str(v).lower():
                         filtered_data.append(row)
                         break
+        # Clear and repopulate the treeview
         for row in data_tree.get_children():
             data_tree.delete(row)
+        current_data_rows.clear()
         for row in filtered_data:
             user = f"{row['summoner_id']}#{row['tag_line']}" if row['tag_line'] else row['summoner_id']
             kda = f"{row['kills']}/{row['deaths']}/{row['assists']} ({(row['kills']+row['assists'])/(row['deaths'] if row['deaths'] > 0 else 1):.2f})"
@@ -633,10 +682,11 @@ def start_gui():
             seconds = duration_seconds % 60
             duration = f"{minutes}:{seconds:02d}"
             items = row.get("items", "No items")
-            data_tree.insert("", "end", values=(
+            data_tree.insert("", "end", iid=row["match_id"], values=(
                 user, row["champion"], kda, cs, kp, row["win"], duration, row["damage"], row["level"], row["vision"],
                 row["match_date"], row["game_type"], row["patch"], items
             ))
+            current_data_rows.append(row)
 
     filter_btn.config(command=apply_filter)
 
