@@ -4,19 +4,36 @@ from tkinter import ttk
 from module6_1 import deduplicate_matches
 
 
-
-
-
-def plot_graph(stat_list, stat_type, graph_type, dashboard_tab, plot_canvas = None):
-        # Safely destroy the previous canvas if it exists
-        if plot_canvas is not None:
-            try:
-                plot_canvas.get_tk_widget().destroy()
-            except Exception:
-                pass
-            plot_canvas = None
-        fig, ax = plt.subplots(figsize=(7, 4), dpi=100)
+def plot_graph(stat_list, stat_type, graph_type, dashboard_tab, plot_canvas=None):
+    # Safely destroy the previous canvas if it exists
+    if plot_canvas is not None:
+        try:
+            plot_canvas.get_tk_widget().destroy()
+        except Exception:
+            pass
+        plot_canvas = None
+    
+    fig, ax = plt.subplots(figsize=(7, 4), dpi=100)
+    
+    # Handle empty data case
+    if not stat_list:
+        # Create empty plot with proper labels
+        ax.set_title(f"{stat_type} Over Recent Games")
+        ax.set_xlabel("Game #", fontsize=12)
+        ax.set_ylabel(
+            "Winrate (%)" if stat_type == "Winrate"
+            else "KP (%)" if stat_type == "KP"
+            else stat_type,
+            fontsize=12
+        )
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.set_xlim(0, 10)  # Default x range
+        ax.set_ylim(0, 10)  # Default y range
+        ax.text(5, 5, "No data available", ha='center', va='center', fontsize=14, color='gray')
+    else:
+        # Normal plotting with data
         x = range(1, len(stat_list)+1)
+        
         if graph_type == "Line":
             ax.plot(x, stat_list, marker="o", color="skyblue", linewidth=2, markersize=8)
         elif graph_type == "Bar":
@@ -34,6 +51,7 @@ def plot_graph(stat_list, stat_type, graph_type, dashboard_tab, plot_canvas = No
             ax.barh(x, stat_list, color="skyblue")
         elif graph_type == "Boxplot":
             ax.boxplot(stat_list, vert=True)
+        
         ax.set_title(f"{stat_type} Over Recent Games")
         ax.set_xlabel("Game #", fontsize=12)
         ax.set_ylabel(
@@ -44,12 +62,20 @@ def plot_graph(stat_list, stat_type, graph_type, dashboard_tab, plot_canvas = No
         )
         ax.grid(True, linestyle='--', alpha=0.6)
         ax.set_ylim(bottom=0)
+        
+        # Add value labels on data points
         for i, v in enumerate(stat_list):
             ax.text(x[i], v + 0.1, f"{v:.2f}", ha='center', fontsize=9, color='blue')
-        fig.tight_layout()
-        plot_canvas = FigureCanvasTkAgg(fig, master=dashboard_tab)
-        plot_canvas.get_tk_widget().grid(row=4, column=0, columnspan=4, pady=10)
-        plot_canvas.draw()
+    
+    fig.tight_layout()
+    plot_canvas = FigureCanvasTkAgg(fig, master=dashboard_tab)
+    plot_canvas.get_tk_widget().grid(row=4, column=0, columnspan=4, pady=10)
+    plot_canvas.draw()
+    
+    return plot_canvas  # Return the canvas so it can be stored
+
+
+
 
 # --- Stats Comparison Graphs in Match Details Popup ---
 stats_to_plot = [

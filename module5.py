@@ -10,7 +10,7 @@ CSV_path = os.path.join("data", "history.csv")
 
 # Define the column headers for the CSV file.
 FIELDS = ["summoner_id", "tag_line", "match_id", "patch", "match_date", "game_type", "duration", "win", "champion", "lane", "kills", "deaths", "assists", "cs", "damage", "kill_participation", "gold", "vision",
-           "xp_per_min", "cs_per_min", "gold_per_min", "level", "items", "tier", "rank", "leaguePoints", "wins", "losses", "win_rate_ranked", "ingest_date"]
+           "xp_per_min", "cs_per_min", "gold_per_min", "level", "items", "primary_tree", "secondary_tree", "rune_summary" "tier", "rank", "leaguePoints", "wins", "losses", "win_rate_ranked", "stat_perks", "ingest_date"]
 
 def init_storage():
     """
@@ -94,6 +94,10 @@ def load_data(day: int = None) -> list[dict]:
             row["wins"] = int(row.get("wins", 0))
             row["losses"] = int(row.get("losses", 0))
             row["win_rate_ranked"] = float(row.get("win_rate_ranked", 0.0))
+            row["primary_tree"] = row.get("primary_tree", "Unknown")
+            row["secondary_tree"] = row.get("secondary_tree", "Unknown") 
+            row["rune_summary"] = row.get("rune_summary", "Unknown/Unknown")
+            row["keystone"] = row.get("keystone", "Unknown")
             
             items_str = row.get("items", "")
             try:
@@ -103,6 +107,26 @@ def load_data(day: int = None) -> list[dict]:
                     row["items"] = []
             except Exception:
                 row["items"] = []
+
+            # Handle all_runes field (stored as string representation of list)
+            all_runes_str = row.get("all_runes", "[]")
+            try:
+                if all_runes_str and all_runes_str != "[]":
+                    row["all_runes"] = ast.literal_eval(all_runes_str)
+                else:
+                    row["all_runes"] = []
+            except Exception:
+                row["all_runes"] = []
+            
+            # Handle stat_perks field (stored as string representation of dict)
+            stat_perks_str = row.get("stat_perks", "{}")
+            try:
+                if stat_perks_str and stat_perks_str != "{}":
+                    row["stat_perks"] = ast.literal_eval(stat_perks_str)
+                else:
+                    row["stat_perks"] = {}
+            except Exception:
+                row["stat_perks"] = {}
 
             # Convert match_date string to datetime for comparison
             try:

@@ -9,6 +9,7 @@ from module3 import get_inventory, get_item_data
 from module5 import load_data
 from module6_1 import deduplicate_matches, data_treeview_format, dashboard_treeview_format, refresh_treeview, treeview_sort_column
 from module6_2 import plot_graph, plot_stat_graphs
+from module6_3 import display_rune_page, display_final_inventory, display_item_timeline
 from module7 import get_champion_Square, get_champion_LS, get_champion_item
 import os
 import ast
@@ -175,6 +176,7 @@ def start_gui():
     btn.grid(row=0, column=3)
 
     def update_graph(name, tag, recent):
+        global plot_canvas  # Make sure plot_canvas is accessible
         stat_list = []
         stat_type = stat_type_var.get()
         if stat_type == "Winrate":
@@ -193,7 +195,7 @@ def start_gui():
                 elif stat_type == "KP":
                     value = row["kill_participation"] * 100
                 stat_list.append(value)
-        plot_graph(stat_list, stat_type, graph_type_var.get(), dashboard_tab, plot_canvas)
+        plot_canvas = plot_graph(stat_list, stat_type, graph_type_var.get(), dashboard_tab, plot_canvas)
 
 
     def on_match_select(event):
@@ -253,115 +255,22 @@ def start_gui():
         ttk.Label(match_details_tab, text=f"Patch: {patch}").pack(pady=5)
         #ttk.Label(match_details_tab, text=f"Items: {items}").pack(pady=5)
 
-        # Parse items
-        if isinstance(items, str):
-            try:
-                items_list = ast.literal_eval(items)
-            except Exception:
-                items_list = []
-        else:
-            items_list = items
+        # In the on_match_select function, replace the item parsing section with:
+        display_final_inventory(match_details_tab, items)
 
-        if items_list and len(items_list[0]) == 2:
-            items_list = [(ts, item_id, "PURCHASE") for ts, item_id in items_list]
+        # Replace the timeline visualization section with:
+        display_item_timeline(timeline_tab, items)
 
-        final_inventory = get_inventory(items_list)
-        item_data = get_item_data()
-        completed = []
-        components = []
-        for item_id in final_inventory:
-            item = item_data.get(str(item_id))
-            if not item:
-                continue
-            tags = item.get("tags", [])
-            if not item.get("into") and item.get("gold", {}).get("purchasable", False) and \
-               "Consumable" not in tags and "Trinket" not in tags:
-                completed.append(item_id)
-            elif "Consumable" not in tags and "Trinket" not in tags:
-                components.append(item_id)
-        final_display = completed[:6]
-        if len(final_display) < 6:
-            final_display += components[:6 - len(final_display)]
+        rune_info = {
+            'primary_tree': full_row.get('primary_tree', 'Unknown'),
+            'secondary_tree': full_row.get('secondary_tree', 'Unknown'), 
+            'all_runes': full_row.get('all_runes', []),
+            'stat_perks': full_row.get('stat_perks', {}),
+            'keystone': full_row.get('keystone', 'Unknown')
+        }
 
-        ttk.Label(match_details_tab, text="Final Inventory:").pack(pady=5)
-        item_frame = ttk.Frame(match_details_tab)
-        item_frame.pack(pady=5)
-        item_images = []
-        for item_id in final_display:
-            try:
-                img = get_champion_item(str(item_id))
-                item_images.append(img)
-                lbl = ttk.Label(item_frame, image=img)
-                lbl.pack(side="left", padx=2)
-            except Exception as e:
-                print(f"Failed to load art for {item_id}: {e}")
-                lbl = ttk.Label(item_frame, text=str(item_id))
-                lbl.pack(side="left", padx=2)
-        popup.item_images = item_images
-
-        ttk.Label(timeline_tab, text="Item Timeline:").pack()
-
-        # --- Item Timeline Visualization ---
-        # items_list is already parsed above and contains (timestamp, item_id, action)
-        items_per_row = 10  # Number of items per row
-        row_height = 125    # Increased for more space
-        icon_size = 48
-        spacing = 100
-
-        if items_list:
-            sorted_items = sorted(items_list, key=lambda x: x[0])
-            num_rows = (len(sorted_items) + items_per_row - 1) // items_per_row
-            canvas_width = max(800, items_per_row * spacing + 40)
-            canvas_height = max(120, num_rows * row_height + 40)
-            timeline_canvas = tk.Canvas(timeline_tab, bg="white", height=canvas_height, width=canvas_width)
-            timeline_canvas.pack(fill="x", padx=10, pady=10)
-
-            positions = []  # Store icon center positions for arrows
-
-            for idx, (ts, item_id, action) in enumerate(sorted_items):
-                if action not in ("PURCHASE", "SELL"):
-                    continue
-                row = idx // items_per_row
-                col = idx % items_per_row
-                x = 10 + col * spacing
-                y = 10 + row * row_height
-                # Get item art
-                try:
-                    img = get_champion_item(str(item_id))
-                except Exception:
-                    img = None
-                # Draw item icon
-                if img:
-                    timeline_canvas.create_image(x, y, anchor="nw", image=img)
-                    if not hasattr(timeline_canvas, "images"):
-                        timeline_canvas.images = []
-                    timeline_canvas.images.append(img)
-                # Save center position for arrows
-                positions.append((x + icon_size // 2, y + icon_size // 2, row, col, ts))
-                # Draw timestamp below icon
-                seconds = int(ts // 1000)
-                minutes = seconds // 60
-                sec = seconds % 60
-                ts_str = f"{minutes}:{sec:02d}"
-                timeline_canvas.create_text(
-                    x + icon_size // 2, y + icon_size + 15,
-                    text=ts_str, font=("Arial", 9, "bold"), anchor="n"
-                )
-                # Draw action below timestamp
-                timeline_canvas.create_text(
-                    x + icon_size // 2, y + icon_size + 28,
-                    text=action, font=("Arial", 7), anchor="n"
-                )
-
-            # Draw arrows between icons in the same row
-            for i in range(len(positions) - 1):
-                x1, y1, row1, col1, ts1 = positions[i]
-                x2, y2, row2, col2, ts2 = positions[i + 1]
-                if row1 == row2 and ts1 != ts2:  # Only connect if not grouped
-                    timeline_canvas.create_line(
-                        x1 + icon_size // 2, y1, x2 - icon_size // 2, y2,
-                        arrow=tk.LAST, width=2, fill="#888"
-                    )
+        # Display the rune page
+        display_rune_page(timeline_tab, rune_info)
 
         # When creating the popup:
         graph_type_var = tk.StringVar(value="Bar")
@@ -459,6 +368,6 @@ def start_gui():
     switch.grid(row=0, column=0, columnspan=4, sticky="w")
 
     # --- Show a blank graph at startup ---
-    #plot_graph([], stat_type_var.get(), graph_type_var.get(),None,dashboard_tab ,plot_canvas)
+    plot_canvas = plot_graph([], stat_type_var.get(), graph_type_var.get(), dashboard_tab, plot_canvas)
 
     root.mainloop()

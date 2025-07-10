@@ -1,6 +1,7 @@
 import requests
 from module2 import HEADERS  # reuse the same headers dict
 from module5 import load_data
+from module7 import get_runes_data  # Import the function to get rune data
 from datetime import datetime  # For handling timestamps
 
 
@@ -132,7 +133,21 @@ def extract_my_stats(match_json: dict, my_puuid: str) -> dict:
                 ),  # Calculate win rate
             }
 
-            return { **stats, **stats_timeline, **stats_ranked }  # Return the extracted stats as a dictionary
+            
+            rune_info = extract_rune_info(P)  # Extract rune information
+            formatted_runes = format_rune_info(rune_info, get_runes_data())
+
+            runes = {
+                "primary_tree": formatted_runes['primary_tree'],
+                "secondary_tree": formatted_runes['secondary_tree'],
+                "rune_summary": formatted_runes['rune_summary'],
+                "keystone": formatted_runes['rune_names'][0] if formatted_runes['rune_names'] else 'Unknown',
+                "all_runes": formatted_runes['rune_names'],
+                "stat_perks": formatted_runes['stat_perks'],
+            }
+            
+
+            return { **stats, **stats_timeline, **stats_ranked, **runes }  # Return the extracted stats as a dictionary
 
     return None  # Return None if no matching participant is found
 
@@ -214,6 +229,81 @@ def get_inventory(item_events):
         elif action == "UNDO":
             pass
     return inventory  # Return the last 6 items (LoL inventory size)
+
+def extract_rune_info(participant_data: dict) -> dict:
+    """
+    Extract rune information from participant data.
+    Returns a dictionary with primary tree, secondary tree, and all selected runes.
+    """
+    perks = participant_data.get('perks', {})
+    
+    # Get primary and secondary style IDs
+    primary_style = perks.get('perkPrimaryStyle', 0)
+    secondary_style = perks.get('perkSubStyle', 0)
+    
+    # Get all selected runes
+    perk_ids = perks.get('perkIds', [])
+    
+    # Get stat perks (the small stat runes at the bottom)
+    stat_perks = perks.get('statPerks', {})
+    
+    return {
+        'primary_tree_id': primary_style,
+        'secondary_tree_id': secondary_style,
+        'selected_runes': perk_ids,
+        'stat_perks': {
+            'offense': stat_perks.get('offense', 0),
+            'flex': stat_perks.get('flex', 0),
+            'defense': stat_perks.get('defense', 0)
+        }
+    }
+
+def format_rune_info(rune_info: dict, rune_data: dict) -> dict:
+    """
+    Format rune information with human-readable names.
+    """
+    primary_tree = rune_data.get(rune_info['primary_tree_id'], {}).get('name', 'Unknown')
+    secondary_tree = rune_data.get(rune_info['secondary_tree_id'], {}).get('name', 'Unknown')
+    
+    # Get rune names
+    rune_names = []
+    for rune_id in rune_info['selected_runes']:
+        rune = rune_data.get(rune_id, {})
+        if rune.get('type') == 'rune':
+            rune_names.append(rune.get('name', f'Unknown_{rune_id}'))
+    
+    # Format stat perks
+    stat_perk_mapping = {
+        # Offense
+        5005: "+9 Adaptive Force",
+        5007: "+10.5 Attack Damage",
+        5008: "+9 Ability Power",
+        5001: "+15-140 Health (based on level)",
+        5002: "+6 Armor",
+        5003: "+8 Magic Resist",
+        # Flex
+        5011: "+9 Adaptive Force",
+        5013: "+10.5 Attack Damage", 
+        5014: "+9 Ability Power",
+        # Defense
+        5001: "+15-140 Health (based on level)",
+        5002: "+6 Armor",
+        5003: "+8 Magic Resist"
+    }
+    
+    stat_perks_formatted = {
+        'offense': stat_perk_mapping.get(rune_info['stat_perks']['offense'], 'Unknown'),
+        'flex': stat_perk_mapping.get(rune_info['stat_perks']['flex'], 'Unknown'),
+        'defense': stat_perk_mapping.get(rune_info['stat_perks']['defense'], 'Unknown')
+    }
+    
+    return {
+        'primary_tree': primary_tree,
+        'secondary_tree': secondary_tree,
+        'rune_names': rune_names,
+        'stat_perks': stat_perks_formatted,
+        'rune_summary': f"{primary_tree}/{secondary_tree}"
+    }
 
 def compute_summary(stats: list[dict]) -> dict:
     
